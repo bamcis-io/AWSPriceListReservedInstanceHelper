@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27703.2018
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PriceListApiFormatter", "PriceListApiFormatter\PriceListApiFormatter.csproj", "{532D2BAB-7ED7-4120-85D0-6CEEFAECB5B4}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PriceListApiFormatter.Tests", "PriceListApiFormatter.Tests\PriceListApiFormatter.Tests.csproj", "{317038F1-CEEC-4728-AF9E-609E9361260D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{532D2BAB-7ED7-4120-85D0-6CEEFAECB5B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{532D2BAB-7ED7-4120-85D0-6CEEFAECB5B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{532D2BAB-7ED7-4120-85D0-6CEEFAECB5B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{532D2BAB-7ED7-4120-85D0-6CEEFAECB5B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{317038F1-CEEC-4728-AF9E-609E9361260D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{317038F1-CEEC-4728-AF9E-609E9361260D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{317038F1-CEEC-4728-AF9E-609E9361260D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{317038F1-CEEC-4728-AF9E-609E9361260D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {EF385E70-E237-47D3-822A-E46781903EF1}
+	EndGlobalSection
+EndGlobal

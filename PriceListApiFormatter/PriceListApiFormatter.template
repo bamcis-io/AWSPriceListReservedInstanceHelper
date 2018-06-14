@@ -1,0 +1,406 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Transform"                : "AWS::Serverless-2016-10-31",
+    "Description"              : "An AWS Serverless Application.",
+
+
+    "Parameters"               : {
+        "LogRetentionInDays" : {
+            "Type" : "Number",
+            "Description" : "The number of days to retain the CloudWatch Logs for the function. If this is set to 0, it will be infinite retention.",
+            "MinValue"    : 0,
+            "Default"     : 7
+        },
+        "ResultsBucket"                  : {
+            "Description" : "The bucket where the raw video will be uploaded to.",
+            "Type"        : "String",
+            "MinLength"   : 3,
+            "MaxLength"   : 63,
+            "AllowedPattern" : "^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$"
+        },
+        "NotificationEmail"  : {
+            "Description" : "The email address notifications will be sent to when processing errors occur.",
+            "Type"        : "String"
+        },
+        "Frequency"          : {
+            "Description" : "The frequency the function will run based on the time unit set.",
+            "Type"        : "Number",
+            "MinValue"    : 1,
+            "MaxValue"    : 60,
+            "Default"     : 1
+        },
+        "TimeUnit"           : {
+            "Description" : "The unit of time for the frequency.",
+            "Type"        : "String",
+            "AllowedValues" : [
+                "second",
+                "minute",
+                "hour",
+                "day"
+            ],
+            "Default"       : "minute"
+        },
+
+        "OrganizationTag"    : {
+            "Description" : "The organization this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "^\\S{2,}$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$"
+        },
+        "ApplicationTag"     : {
+            "Description" : "The application this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "^\\S{2,}$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$",
+            "Default"               : "ElasticTranscoderJobTrigger"
+        },
+        "EnvironmentTag"     : {
+            "Description" : "The environment this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "^\\S{2,}$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$",
+            "Default"               : "dev"
+        }
+    },
+
+
+    "Conditions"               : {
+        "InfiniteRetention" : {
+            "Fn::Equals" : [
+                {
+                    "Ref" : "LogRetentionInDays"
+                },
+                0
+            ]
+        },
+        "AddS"              : {
+            "Fn::Not" : [
+                {
+                    "Fn::Equals" : [
+                        {
+                            "Ref" : "Frequency"
+                        },
+                        1
+                    ]
+                }
+            ]
+        }
+    },
+
+
+    "Resources"                : {
+        "SNSTopic" : {
+            "Type" : "AWS::SNS::Topic",
+            "Properties" : {
+                "DisplayName" : "PriceListApiFormatter",
+                "Subscription" : [
+                    {
+                        "Protocol" : "email",
+                        "Endpoint" : {
+                            "Ref" : "NotificationEmail"
+                        }
+                    }
+                ],
+                "TopicName"    : "PriceListApiFormatter_Notifications"
+            }
+        },
+
+		"ResultsS3Bucket"   : {
+            "Type" : "AWS::S3::Bucket",
+            "Properties" : {
+                "BucketName" : {
+                    "Ref" : "ResultsBucket"
+                },
+                "Tags"       : [
+                    {
+                        "Key" : "Environment",
+                        "Value" : {
+                            "Ref" : "EnvironmentTag"
+                        }
+                    },
+                    {
+                        "Key" : "Application",
+                        "Value" : {
+                            "Ref" : "ApplicationTag"
+                        }
+                    },
+                    {
+                        "Key" : "Organization",
+                        "Value" : {
+                            "Ref" : "OrganizationTag"
+                        }
+                    }
+                ]
+            }
+        },
+
+        "LambdaExecutionRole" : {
+            "Type" : "AWS::IAM::Role",
+            "Properties" : {
+                "RoleName" : "LambdaPriceListFormatterRole",
+                "AssumeRolePolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "sts:AssumeRole"
+                            ],
+                            "Principal" : {
+                                "Service" : [
+                                    "lambda.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaCWLPolicy"     : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaCWLPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "logs:CreateLogStream",
+                                "logs:CreateLogGroup",
+                                "logs:DescribeLogStreams",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogGroups"
+                            ],
+                            "Resource" : {
+                                "Fn::Join" : [
+                                    "",
+                                    [
+                                        "arn:aws:logs:*:",
+                                        {
+                                            "Ref" : "AWS::AccountId"
+                                        },
+                                        ":*"
+                                    ]
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+        "LambdaKMSPolicy"     : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaKMSPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "kms:Decrypt"
+                            ],
+                            "Resource" : [
+                                "*"
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+        "LambdaPricingPolicy" : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaPricingPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "pricing:DescribeServices",
+                                "pricing:GetAttributeValues",
+                                "pricing:GetProducts"
+                            ],
+                            "Resource" : [
+                                "*"
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+        "LambdaSNSPolicy"     : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaSNSPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "sns:Publish"
+                            ],
+                            "Resource" : [
+                                {
+                                    "Ref" : "SNSTopic"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+		"LambdaS3Policy"     : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaS3Policy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "s3:PutObject"
+                            ],
+                            "Resource" : [
+                                {
+                                    "Fn::Join" : [
+										"",
+										[
+											"arn:aws:s3:::",
+											{
+												"Ref" : "ResultsBucket"
+											},
+											"/*"
+										]
+									]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+
+        "CloudWatchLogGroup"  : {
+            "Type" : "AWS::Logs::LogGroup",
+            "Properties" : {
+                "LogGroupName" : "/aws/lambda/PriceListApiFormatter",
+                "RetentionInDays" : {
+                    "Fn::If" : [
+                        "InfiniteRetention",
+                        {
+                            "Ref" : "AWS::NoValue"
+                        },
+                        {
+                            "Ref" : "LogRetentionInDays"
+                        }
+                    ]
+                }
+            }
+        },
+
+        "PriceListFormatterFunction" : {
+            "Type" : "AWS::Serverless::Function",
+            "Properties" : {
+                "Handler" : "PriceListApiFormatter::BAMCIS.LambdaFunctions.PriceListApiFormatter.Entrypoint::Exec",
+				"FunctionName" : "PriceListApiFormatter",
+				"Description": "Downloads the price list files and formats them for ingestion by Athena.",
+                "Runtime" : "dotnetcore2.0",
+                "CodeUri" : "",
+                "MemorySize" : 1792,
+                "Timeout"    : 120,
+                "Role"       : {
+                    "Fn::GetAtt" : [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+				"Environment" : {
+				    "Variables" : {
+						"BUCKET" : {
+							"Ref" : "ResultsS3Bucket"
+						}
+					}
+				},
+                "Events"     : {
+                    "Exec" : {
+                        "Type" : "Schedule",
+                        "Properties" : {
+                            "Schedule" : {
+                                "Fn::Join" : [
+                                    "",
+                                    [
+                                        "rate(",
+                                        {
+                                            "Ref" : "Frequency"
+                                        },
+                                        " ",
+                                        {
+                                            "Ref" : "TimeUnit"
+                                        },
+                                        {
+                                            "Fn::If" : [
+                                                "AddS",
+                                                "s",
+                                                {
+                                                    "Ref" : "AWS::NoValue"
+                                                }
+                                            ]
+                                        },
+                                        ")"
+                                    ]
+                                ]
+                            }
+                        }
+                    }
+                },
+                "Tags"       : {
+                    "Name" : "PriceListApiFormatter",
+                    "Environment" : {
+                        "Ref" : "EnvironmentTag"
+                    },
+                    "Application" : {
+                        "Ref" : "ApplicationTag"
+                    },
+                    "Organization" : {
+                        "Ref" : "OrganizationTag"
+                    }
+                }
+            }
+        }
+    },
+
+
+    "Outputs"                  : {
+    }
+}
