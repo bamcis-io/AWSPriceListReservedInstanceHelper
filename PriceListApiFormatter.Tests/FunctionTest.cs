@@ -14,6 +14,7 @@ using BAMCIS.AWSLambda.Common.Events;
 using Amazon.Runtime;
 using Amazon.Runtime.CredentialManagement;
 using System.Diagnostics;
+using BAMCIS.AWSPriceListApi.Serde;
 
 namespace PriceListApiFormatter.Tests
 {
@@ -46,7 +47,7 @@ namespace PriceListApiFormatter.Tests
 
             ImmutableCredentials Cr = Profile.GetAWSCredentials(Creds).GetCredentials();
 
-            ClientContext.Environment.Add("BUCKET", "mhaken-billing");
+            ClientContext.Environment.Add("BUCKET", "mhaken-pricelist");
 
             TestLambdaContext Context = new TestLambdaContext()
             {
@@ -62,6 +63,55 @@ namespace PriceListApiFormatter.Tests
             await Ep.Exec(Event, Context);
 
             // ASSERT
+        }
+
+        [Fact]
+        public void TestEx()
+        {
+            List<Tuple<string, string>> Data = new List<Tuple<string, string>>()
+            {
+                new Tuple<string, string>("test1", "test1"),
+                new Tuple<string, string>("test1", "test2"),
+                new Tuple<string, string>("test1", "test3"),
+                new Tuple<string, string>("test3", "test1"),
+                new Tuple<string, string>("test3", "test2"),
+                new Tuple<string, string>("test3", "test3"),
+            };
+
+            IEnumerable<IGrouping<string, Tuple<string, string>>> Input = Data.GroupBy(x => x.Item1);
+
+            try
+            {
+                IEnumerable<string> Temp = Input.SelectMany(x =>
+                {
+                    try
+                    {
+                        return InnerClass.Build();
+                    }
+                    catch (Exception e)
+                    {
+                        return new string[0];
+                    }
+                });
+
+                var T = Temp.ToList();
+            }
+            catch (Exception e)            
+            {
+                int j = 0;
+            }
+
+            int i = 0;
+        }
+
+        internal class InnerClass
+        {
+            public IEnumerable<string> Prop { get; }
+
+            public static IEnumerable<string> Build()
+            {
+                throw new KeyNotFoundException();
+            }
         }
     }
 }

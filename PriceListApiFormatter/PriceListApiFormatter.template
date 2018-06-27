@@ -157,6 +157,29 @@
                 }
             }
         },
+		"LambdaSplitterExecutionRole" : {
+            "Type" : "AWS::IAM::Role",
+            "Properties" : {
+                "RoleName" : "LambdaPriceListSplitterRole",
+                "AssumeRolePolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "sts:AssumeRole"
+                            ],
+                            "Principal" : {
+                                "Service" : [
+                                    "lambda.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+
         "LambdaCWLPolicy"     : {
             "Type" : "AWS::IAM::Policy",
             "Properties" : {
@@ -191,6 +214,9 @@
                 "Roles"          : [
                     {
                         "Ref" : "LambdaExecutionRole"
+                    },
+					{
+                        "Ref" : "LambdaSplitterExecutionRole"
                     }
                 ]
             }
@@ -215,6 +241,9 @@
                 },
                 "Roles"          : [
                     {
+                        "Ref" : "LambdaExecutionRole"
+                    },
+					{
                         "Ref" : "LambdaExecutionRole"
                     }
                 ]
@@ -270,6 +299,9 @@
                 "Roles"          : [
                     {
                         "Ref" : "LambdaExecutionRole"
+                    },
+					{
+                        "Ref" : "LambdaExecutionRole"
                     }
                 ]
             }
@@ -310,11 +342,55 @@
                 ]
             }
         },
+		"LambdaLambdaPolicy"     : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaLambdaPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "lambda:InvokeFunction"
+                            ],
+                            "Resource" : [
+                                {
+                                    "Fn::GetAtt" : [ "PriceListFormatterFunction", "Arn"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaSplitterExecutionRole"
+                    }
+                ]
+            }
+        },
 
         "CloudWatchLogGroup"  : {
             "Type" : "AWS::Logs::LogGroup",
             "Properties" : {
                 "LogGroupName" : "/aws/lambda/PriceListApiFormatter",
+                "RetentionInDays" : {
+                    "Fn::If" : [
+                        "InfiniteRetention",
+                        {
+                            "Ref" : "AWS::NoValue"
+                        },
+                        {
+                            "Ref" : "LogRetentionInDays"
+                        }
+                    ]
+                }
+            }
+        },
+		"CloudWatchLogGroupSplitter"  : {
+            "Type" : "AWS::Logs::LogGroup",
+            "Properties" : {
+                "LogGroupName" : "/aws/lambda/PriceListApiSplitter",
                 "RetentionInDays" : {
                     "Fn::If" : [
                         "InfiniteRetention",
@@ -337,8 +413,8 @@
 				"Description": "Downloads the price list files and formats them for ingestion by Athena.",
                 "Runtime" : "dotnetcore2.0",
                 "CodeUri" : "",
-                "MemorySize" : 1792,
-                "Timeout"    : 120,
+                "MemorySize" : 2560,
+                "Timeout"    : 300,
                 "Role"       : {
                     "Fn::GetAtt" : [
                         "LambdaExecutionRole",
@@ -349,6 +425,44 @@
 				    "Variables" : {
 						"BUCKET" : {
 							"Ref" : "ResultsS3Bucket"
+						}
+					}
+				},
+                "Tags"       : {
+                    "Name" : "PriceListApiFormatter",
+                    "Environment" : {
+                        "Ref" : "EnvironmentTag"
+                    },
+                    "Application" : {
+                        "Ref" : "ApplicationTag"
+                    },
+                    "Organization" : {
+                        "Ref" : "OrganizationTag"
+                    }
+                }
+            }
+        },
+
+		"SplitterFunction" : {
+            "Type" : "AWS::Serverless::Function",
+            "Properties" : {
+                "Handler" : "PriceListApiFormatter::BAMCIS.LambdaFunctions.PriceListApiFormatter.Entrypoint::Split",
+				"FunctionName" : "PriceListApiSplitter",
+				"Description": "Kicks of the price list formatter functions.",
+                "Runtime" : "dotnetcore2.0",
+                "CodeUri" : "",
+                "MemorySize" : 256,
+                "Timeout"    : 30,
+                "Role"       : {
+                    "Fn::GetAtt" : [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+				"Environment" : {
+				    "Variables" : {
+						"FunctionName" : {
+							"Ref" : "PriceListFormatterFunction"
 						}
 					}
 				},
@@ -385,7 +499,7 @@
                     }
                 },
                 "Tags"       : {
-                    "Name" : "PriceListApiFormatter",
+                    "Name" : "PriceListApiSplitter",
                     "Environment" : {
                         "Ref" : "EnvironmentTag"
                     },
@@ -398,8 +512,7 @@
                 }
             }
         }
-    },
-
+	},
 
     "Outputs"                  : {
     }

@@ -1,0 +1,519 @@
+﻿using BAMCIS.AWSPriceListApi.Serde;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
+{
+    /// <summary>
+    /// This class represents the combination of multiple price dimensions for a single
+    /// product so we end up combining the upfront fee and recurring fee price dimensions
+    /// into a single set of information
+    /// </summary>
+    public sealed class ReservedInstancePricingTerm
+    {
+        #region Private Fields
+        
+        /// <summary>
+        /// Will hold any error messages generated during creating the processing 
+        /// of the reserved instance pricing terms
+        /// </summary>
+        private List<string> ErrorMessages = new List<string>();
+
+        #endregion
+
+        #region Public Properties
+
+        /// <summary>
+        /// The SKU that matches a SKU from the products section, this is the key of the term item
+        /// </summary>
+        public string Sku { get; }
+
+        /// <summary>
+        /// The code specific to the offer term, the key for the term is SKU.OfferTermCode, like 76V3SF2FJC3ZR3GH.JRTCKXETXF
+        /// </summary>
+        public string OfferTermCode { get; }
+
+        /// <summary>
+        /// The description of the pricing term, like "$0.42 per On Demand Windows with SQL Web c5.xlarge Instance Hour"
+        /// </summary>
+        public string Description { get; }
+
+        /// <summary>
+        /// The platform of the product, like Linux, RHEL, MySQL, SQL Server Web BYOL, Oracle EE, ElastiCache Redis, etc
+        /// </summary>
+        public string Platform { get; }
+
+        /// <summary>
+        /// The tenancy of the instance
+        /// </summary>
+        public string Tenancy { get; }
+
+        /// <summary>
+        /// The operation code for the price term
+        /// </summary>
+        public string Operation { get; }
+
+        /// <summary>
+        /// The usage type for the price term
+        /// </summary>
+        public string UsageType { get; }
+
+        /// <summary>
+        /// The region for the pricing term
+        /// </summary>
+        public string Region { get; }
+
+        /// <summary>
+        /// The service family this price term relates to, like Amazon Elastic Compute Cloud
+        /// </summary>
+        public string Service { get; }
+
+        /// <summary>
+        /// The instance type for this pricing term
+        /// </summary>
+        public string InstanceType { get; }
+
+        /// <summary>
+        /// The price per unit for the resource, typically the hourly price, 
+        /// will be 0 for All Upfront reserved instances. This is different than 
+        /// the on-demand hourly price for reserved instance, i.e. it will be 
+        /// their recurring fee for a no upfront or partial upfront instance.
+        /// </summary>
+        public double AdjustedPricePerUnit { get; }
+
+        /// <summary>
+        /// The normal on demand cost for running the instance
+        /// </summary>
+        public double OnDemandHourlyCost { get; }
+
+        /// <summary>
+        /// A percentage, between 0 and 1, representing the amount of time during a 
+        /// lease period that an instance would need to be running for the reserved instance
+        /// option to cost less. For example, if it was .695 for a 1 year lease, if the instance
+        /// ran less than 69.5% of the time during the year, it would be cheaper to pay the on
+        /// demand costs than buy a reserved instance
+        /// </summary>
+        public double BreakevenPercentage { get; }
+
+        /// <summary>
+        /// This is the upfront fee associated with the term, will be 0 for on-demand resources
+        /// </summary>
+        public double UpfrontFee { get; }
+
+        /// <summary>
+        /// The length of the reserved instance term, usually 1 or 3 years
+        /// </summary>
+        public int LeaseTerm { get; }
+
+        /// <summary>
+        /// The purchasing option for the reserved instance, may be no upfront,
+        /// all upfront, heavy utilization, light utilization, etc
+        /// </summary>
+        public PurchaseOption PurchaseOption { get; }
+
+        /// <summary>
+        /// The offering class of the reserved instance, like standard or convertible
+        /// </summary>
+        public OfferingClass OfferingClass { get; }
+
+        /// <summary>
+        /// The type of the term
+        /// </summary>
+        public Term TermType { get; }
+
+        /// <summary>
+        /// The unique key identifying this term among the other pricing terms
+        /// that share the same sku
+        /// </summary>
+        public string Key { get; }
+
+        /// <summary>
+        /// The total cost of the reserved instance including upfront and recurring fees for the lease term
+        /// </summary>
+        public double ReservedInstanceCost { get; }
+
+        /// <summary>
+        /// The total cost running the instance on demand for the lease term would cost
+        /// </summary>
+        public double OnDemandCostForTerm { get; }
+
+        /// <summary>
+        /// The maximum total cost savings of using the RI over running on-demand. This assumes
+        /// 24/7 utilization for the entire lease term.
+        /// </summary>
+        public double CostSavings { get; }
+
+        /// <summary>
+        /// The maximum savings from using the reserved instance as a percent over the on demand costs
+        /// </summary>
+        public string PercentSavings { get; }
+
+        #endregion
+
+        #region Constructors
+
+        /// <summary>
+        /// Creates a new consolidated pricing term
+        /// </summary>
+        /// <param name="sku"></param>
+        /// <param name="offerTermCode"></param>
+        /// <param name="description"></param>
+        /// <param name="adjustedPricePerUnit"></param>
+        /// <param name="upfrontFee"></param>
+        /// <param name="leaseTerm"></param>
+        /// <param name="purchaseOption"></param>
+        /// <param name="offeringClass"></param>
+        /// <param name="termType"></param>
+        [JsonConstructor]
+        public ReservedInstancePricingTerm(
+            string sku,
+            string offerTermCode,
+            string service,
+            string description,
+            string platform,
+            string instanceType,
+            string operation,
+            string usageType,
+            string tenancy,
+            string region,
+            double onDemandHourlyCost,
+            double adjustedPricePerUnit,
+            double upfrontFee,
+            int leaseTerm,
+            PurchaseOption purchaseOption,
+            OfferingClass offeringClass,
+            Term termType
+        )
+        {
+            this.Sku = sku;
+            this.OfferTermCode = offerTermCode;
+            this.Service = service;
+            this.Description = description;
+            this.Platform = platform;
+            this.InstanceType = instanceType;
+            this.Operation = operation;
+            this.UsageType = usageType;
+            this.Tenancy = tenancy;
+            this.Region = region;
+            this.OnDemandHourlyCost = onDemandHourlyCost;
+            this.AdjustedPricePerUnit = adjustedPricePerUnit;
+            this.UpfrontFee = upfrontFee;
+            this.LeaseTerm = leaseTerm;
+            this.PurchaseOption = purchaseOption;
+            this.OfferingClass = offeringClass;
+            this.TermType = termType;
+
+            this.BreakevenPercentage = (this.UpfrontFee + (365 * this.LeaseTerm * 24 * this.AdjustedPricePerUnit)) / (365 * this.LeaseTerm * 24 * this.OnDemandHourlyCost);
+
+            if (termType == Term.ON_DEMAND)
+            {
+                this.Key = "OnDemand";
+            }
+            else
+            {
+                this.Key = $"{this.LeaseTerm}::{this.PurchaseOption.ToString()}::{this.OfferingClass.ToString()}";
+            }
+
+            // Calculated properties
+
+            this.ReservedInstanceCost = this.UpfrontFee + (this.AdjustedPricePerUnit * 24 * 365 * this.LeaseTerm);
+            this.OnDemandCostForTerm = this.OnDemandHourlyCost * 24 * 365 * this.LeaseTerm;
+            this.CostSavings = OnDemandCostForTerm - ReservedInstanceCost;
+
+            if (this.OnDemandCostForTerm > 0)
+            {
+                this.PercentSavings = ((1 - (ReservedInstanceCost / OnDemandCostForTerm)) * 100).ToString("F") + "%";
+            }
+            else
+            {
+                this.PercentSavings = "0%";
+            }
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        /// <summary>
+        /// Creates a consolidated pricing term from a regularly formatted pricing term
+        /// that comes directly from the price list api
+        /// </summary>
+        /// <param name="term"></param>
+        /// <returns></returns>
+        public static IEnumerable<ReservedInstancePricingTerm> Build(IGrouping<string, PricingTerm> commonSkus, Product product)
+        {
+            if (commonSkus != null)
+            {               
+                string Platform = GetPlatform(product);
+                string Region = RegionMapper.GetRegionFromUsageType(product.Attributes.GetValueOrDefault("usagetype"));
+
+                // Only EC2 has tenancy
+                if (!product.Attributes.TryGetValue("tenancy", out string Tenancy))
+                {
+                    Tenancy = "Shared";
+                }
+
+                PricingTerm OnDemand = commonSkus.FirstOrDefault(x => x.TermAttributes.PurchaseOption == PurchaseOption.ON_DEMAND);
+                double OnDemandCost = -1;
+
+                if (OnDemand == null)
+                {
+                    throw new KeyNotFoundException($"An on demand price data term was not found for sku: {commonSkus.Key}.");
+                }
+                else
+                {
+                    // Get the on demand hourly cost
+                    if (!Double.TryParse(OnDemand.PriceDimensions.First().Value.PricePerUnit.First().Value, out OnDemandCost))
+                    {
+                        throw new FormatException($"Could not parse the on demand price {OnDemand.PriceDimensions.First().Value.PricePerUnit.First().Value} for sku: {commonSkus.Key}.");
+                    }
+                }
+
+                // Each pricing term will have the price dimensions for the upfront and recurring costs
+                foreach (PricingTerm Term in commonSkus.Where(x => x.TermAttributes.PurchaseOption != PurchaseOption.ON_DEMAND))
+                {
+                    PriceDimension Upfront = Term.PriceDimensions.Select(x => x.Value).FirstOrDefault(x =>
+                    {
+                        if (!String.IsNullOrEmpty(x.Description))
+                        {
+                            return x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase);
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    });
+
+                    PriceDimension Recurring = Term.PriceDimensions.Select(x => x.Value).FirstOrDefault(x =>
+                    {
+                        if (!String.IsNullOrEmpty(x.Description))
+                        {
+                            return !x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase);
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    });
+
+                    string Description = String.Empty;
+                    double HourlyRecurring = 0;
+
+                    // Only check for recurring, since some may have no upfront
+                    if (Recurring == null)
+                    {
+                        // This should never happen
+                        throw new KeyNotFoundException($"The pricing term in {product.Attributes.GetValueOrDefault("servicecode")} for sku {Term.Sku} and offer term code {Term.OfferTermCode} did not contain a price dimension for hourly usage charges.");
+                    }
+                    else
+                    {
+                        Description = Recurring.Description;
+
+                        // Parse out the rate
+                        if(!Double.TryParse(Recurring.PricePerUnit.First().Value, out HourlyRecurring))
+                        {
+                            throw new FormatException($"Could not parse the recurring price per unit of {Recurring.PricePerUnit.First().Value} for sku {Term.Sku}, offer term code {Term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
+                        }
+                    }
+                    
+                    double UpfrontFee = 0;
+
+                    if (Upfront != null)
+                    {
+                        // Parse out upfront fee
+                        if (!Double.TryParse(Upfront.PricePerUnit.First().Value, out UpfrontFee))
+                        {
+                            throw new FormatException($"Could not parse the upfront cost of {Upfront.PricePerUnit.First().Value} for sku {Term.Sku}, offer term code {Term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
+                        }
+                    }
+
+                    yield return new ReservedInstancePricingTerm(
+                        Term.Sku,
+                        Term.OfferTermCode,
+                        product.Attributes.GetValueOrDefault("servicecode"),
+                        Description,
+                        Platform,
+                        product.Attributes.GetValueOrDefault("instancetype"),
+                        product.Attributes.GetValueOrDefault("operation"),
+                        product.Attributes.GetValueOrDefault("usagetype"),
+                        Tenancy,
+                        Region,
+                        OnDemandCost,
+                        HourlyRecurring,
+                        UpfrontFee,
+                        Term.TermAttributes.LeaseContractLength,
+                        Term.TermAttributes.PurchaseOption,
+                        Term.TermAttributes.OfferingClass,
+                        AWSPriceListApi.Serde.Term.RESERVED
+                    );
+                }
+            }
+            else
+            {
+                throw new ArgumentNullException("commonSkus");
+            }
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        /// <summary>
+        /// Gets the platform string from the product information
+        /// </summary>
+        /// <param name="product"></param>
+        /// <returns>The platform string or UNKNOWN if it couldn't be determined</returns>
+        private static string GetPlatform(Product product)
+        {
+            StringBuilder Buffer = new StringBuilder();
+            IDictionary<string, string> Attributes = product.Attributes.ToDictionary(x => x.Key.ToLower(), x => x.Value, StringComparer.OrdinalIgnoreCase);
+
+            if (Attributes.KeyExistsAndValueNotNullOrEmpty("servicecode"))
+            {
+                Attributes.TryGetValue("servicecode", out string ServiceCode);
+                Attributes.TryGetValue("licensemodel", out string LicenseModel);
+
+                switch (ServiceCode.ToLower())
+                {
+                    case "amazonrds":
+                        {
+                            Attributes.TryGetValue("databaseengine", out string DatabaseEngine);
+                            Attributes.TryGetValue("databaseedition", out string DatabaseEdition);
+
+                            Buffer.Append("RDS ").Append(DatabaseEngine);
+
+                            switch (DatabaseEngine.ToLower())
+                            {
+                                case "sql server":
+                                    {
+                                        if (!String.IsNullOrEmpty(DatabaseEdition))
+                                        {
+                                            switch (DatabaseEdition.ToLower())
+                                            {
+                                                case "enterprise":
+                                                    {
+                                                        Buffer.Append(" EE");
+                                                        break;
+                                                    }
+                                                case "standard":
+                                                    {
+                                                        Buffer.Append(" SE");
+                                                        break;
+                                                    }
+                                                case "web":
+                                                    {
+                                                        Buffer.Append(" Web");
+                                                        break;
+                                                    }
+                                            }
+                                        }
+                                        break;
+                                    }
+                                case "oracle":
+                                    {
+                                        if (!String.IsNullOrEmpty(DatabaseEdition))
+                                        {
+                                            switch (DatabaseEdition.ToLower())
+                                            {
+                                                case "enterprise":
+                                                    {
+                                                        Buffer.Append(" EE");
+                                                        break;
+                                                    }
+                                                case "standard":
+                                                    {
+                                                        Buffer.Append(" SE");
+                                                        break;
+                                                    }
+                                                case "standard one":
+                                                    {
+                                                        Buffer.Append(" SE1");
+                                                        break;
+                                                    }
+                                                case "standard two":
+                                                    {
+                                                        Buffer.Append(" SE2");
+                                                        break;
+                                                    }
+                                            }
+                                        }
+
+                                        break;
+                                    }
+                            }
+
+                            switch (LicenseModel.ToLower())
+                            {
+                                case "bring your own license":
+                                    {
+                                        Buffer.Append(" BYOL");
+                                        break;
+                                    }
+
+                                default:
+                                case "license included":
+                                case "no license required":
+                                    {
+                                        break;
+                                    }
+                            }
+
+                            if (Attributes.TryGetValue("deploymentoption", out string DeploymentOption) &&
+                                DeploymentOption.Equals("Multi-AZ", StringComparison.OrdinalIgnoreCase))
+                            {
+                                Buffer.Append(" Multi-AZ");
+                            }
+
+                            break;
+                        }
+                    case "amazonec2":
+                        {
+                            Attributes.TryGetValue("operatingsystem", out string OperatingSystem);
+                            Buffer.Append(OperatingSystem);
+
+                            switch (LicenseModel.ToLower())
+                            {
+                                case "bring your own license":
+                                    {
+                                        Buffer.Append(" BYOL");
+                                        break;
+                                    }
+
+                                default:
+                                case "license included":
+                                case "no license required":
+                                    {
+                                        break;
+                                    }
+                            }
+
+                            if (Attributes.TryGetValue("preinstalledsw", out string PreInstalledSW) &&
+                                !PreInstalledSW.Equals("NA", StringComparison.OrdinalIgnoreCase))
+                            {
+                                Buffer.Append(" with ").Append(PreInstalledSW);
+                            }
+
+                            break;
+                        }
+                    case "amazonelasticache":
+                        {
+                            Attributes.TryGetValue("cacheengine", out string CacheEngine);
+                            Buffer.Append("ElastiCache ").Append(CacheEngine);
+                            break;
+                        }
+                }
+
+                return Buffer.ToString();
+            }
+            else
+            {
+                return "UNKNOWN";
+            }
+        }
+
+        #endregion
+    }
+}
