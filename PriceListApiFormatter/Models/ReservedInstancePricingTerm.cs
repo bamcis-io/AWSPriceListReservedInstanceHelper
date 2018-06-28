@@ -77,6 +77,11 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
         public string InstanceType { get; }
 
         /// <summary>
+        /// The operating system running on the instance
+        /// </summary>
+        public string OperatingSystem { get; }
+
+        /// <summary>
         /// The price per unit for the resource, typically the hourly price, 
         /// will be 0 for All Upfront reserved instances. This is different than 
         /// the on-demand hourly price for reserved instance, i.e. it will be 
@@ -174,6 +179,7 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
             string service,
             string description,
             string platform,
+            string operatingSystem,
             string instanceType,
             string operation,
             string usageType,
@@ -193,6 +199,7 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
             this.Service = service;
             this.Description = description;
             this.Platform = platform;
+            this.OperatingSystem = operatingSystem;
             this.InstanceType = instanceType;
             this.Operation = operation;
             this.UsageType = usageType;
@@ -330,12 +337,24 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                         }
                     }
 
+                    string OperatingSystem = String.Empty;
+
+                    if (product.Attributes.ContainsKey("operatingsystem"))
+                    {
+                        OperatingSystem = product.Attributes.GetValueOrDefault("operatingsystem");
+                    }
+                    else
+                    {
+                        OperatingSystem = Platform;
+                    }
+
                     yield return new ReservedInstancePricingTerm(
                         Term.Sku,
                         Term.OfferTermCode,
                         product.Attributes.GetValueOrDefault("servicecode"),
                         Description,
                         Platform,
+                        OperatingSystem,
                         product.Attributes.GetValueOrDefault("instancetype"),
                         product.Attributes.GetValueOrDefault("operation"),
                         product.Attributes.GetValueOrDefault("usagetype"),
@@ -347,6 +366,86 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                         Term.TermAttributes.LeaseContractLength,
                         Term.TermAttributes.PurchaseOption,
                         Term.TermAttributes.OfferingClass,
+                        AWSPriceListApi.Serde.Term.RESERVED
+                    );
+                }
+            }
+            else
+            {
+                throw new ArgumentNullException("commonSkus");
+            }
+        }
+
+        /// <summary>
+        /// Creates a consolidated pricing term from price list csv rows that share a common sku
+        /// </summary>
+        /// <param name="commonSkus"></param>
+        /// <returns></returns>
+        public static IEnumerable<ReservedInstancePricingTerm> Build(IGrouping<string, CsvRowItem> commonSkus)
+        {
+            if (commonSkus != null)
+            {
+                CsvRowItem OnDemand = commonSkus.FirstOrDefault(x => x.PurchaseOption == PurchaseOption.ON_DEMAND);
+                double OnDemandCost = -1;
+
+                if (OnDemand == null)
+                {
+                    throw new KeyNotFoundException($"An on demand price data term was not found for sku: {commonSkus.Key}.");
+                }
+                else
+                {
+                    OnDemandCost = OnDemand.PricePerUnit;
+                }
+
+                foreach (IGrouping<string, CsvRowItem> Group in commonSkus.GroupBy(x => x.Key))
+                {
+                    CsvRowItem Upfront = Group.FirstOrDefault(x => x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
+
+                    CsvRowItem Recurring = Group.FirstOrDefault(x => !x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
+  
+                    string Description = String.Empty;
+                    double HourlyRecurring = 0;
+
+                    // Only check for recurring, since some may have no upfront
+                    if (Recurring == null)
+                    {
+                        // This should never happen
+                        throw new KeyNotFoundException($"The pricing term in {Group.First().ServiceCode} for sku {Group.First().Sku} and offer term code {Group.First().OfferTermCode} did not contain a price dimension for hourly usage charges.");
+                    }
+                    else
+                    {
+                        Description = Recurring.Description;
+                        HourlyRecurring = Recurring.PricePerUnit;
+                    }
+
+                    double UpfrontFee = 0;
+
+                    if (Upfront != null)
+                    {
+                        UpfrontFee = Upfront.PricePerUnit;
+                    }
+
+                    string OperatingSystem = Group.First().OperatingSystem;
+
+
+                    yield return new ReservedInstancePricingTerm(
+                        Group.First().Sku,
+                        Group.First().OfferTermCode,
+                        Group.First().ServiceCode,
+                        Description,
+                        Group.First().Platform,
+                        OperatingSystem,
+                        Group.First().InstanceType,
+                        Group.First().Operation,
+                        Group.First().UsageType,
+                        Group.First().Tenancy,
+                        Group.First().Region,
+                        OnDemandCost,
+                        HourlyRecurring,
+                        UpfrontFee,
+                        Group.First().LeaseContractLength,
+                        Group.First().PurchaseOption,
+                        Group.First().OfferingClass,
                         AWSPriceListApi.Serde.Term.RESERVED
                     );
                 }

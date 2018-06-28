@@ -57,10 +57,10 @@ namespace PriceListApiFormatter.Tests
                 ClientContext = ClientContext
             };
 
-            Entrypoint Ep = new Entrypoint();
+            EntrypointJson Ep = new EntrypointJson();
 
             // ACT
-            await Ep.Exec(Event, Context);
+            await Ep.Split(Event, Context);
 
             // ASSERT
         }

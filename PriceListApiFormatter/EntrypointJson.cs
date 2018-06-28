@@ -14,20 +14,18 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
-//[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.Json.JsonSerializer))]
+[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.Json.JsonSerializer))]
 
 namespace BAMCIS.LambdaFunctions.PriceListApiFormatter
 {
-
     /// <summary>
     /// The class that Lambda will call to invoke the Exec method
     /// </summary>
-    public class Entrypoint
+    public class EntrypointJson
     {
         #region Private Fields
 
@@ -46,7 +44,7 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter
         /// <summary>
         /// Default constructor that Lambda will invoke.
         /// </summary>
-        public Entrypoint()
+        public EntrypointJson()
         {
             this._PriceListClient = new PriceListClient();
             this._S3Client = new AmazonS3Client();
@@ -77,8 +75,16 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter
                     ClientContext = JsonConvert.SerializeObject(context.ClientContext, Formatting.None),
                 };
 
-                InvokeResponse Res = await this._LambdaClient.InvokeAsync(Req);
-                context.LogInfo($"Completed kickoff for {Service} with http status {(int)Res.StatusCode}.");
+                Responses.Add(this._LambdaClient.InvokeAsync(Req));
+            }
+
+            foreach (Task<InvokeResponse> Response in Responses.Interleaved())
+            {
+                InvokeResponse Res = await Response;
+                using (StreamReader Reader = new StreamReader(Res.Payload))
+                {
+                    context.LogInfo($"Completed kickoff for {Reader.ReadToEnd()} with http status {(int)Res.StatusCode}.");
+                }
             }
 
             context.LogInfo("All kickoff requests completed.");
@@ -104,10 +110,9 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter
             // Get the product price data for each service
 
             Console.WriteLine($"Getting product data for {req.Service}");
-
             GetProductRequest ProductRequest = new GetProductRequest(req.Service)
             {
-                Format = Format.CSV
+                Format = Format.JSON
             };
 
             // Retrieve the finished get product price data response
@@ -117,67 +122,71 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter
             {
                 using (TransferUtility XferUtil = new TransferUtility(this._S3Client))
                 {
-                    // Find the the beginning of the header line
-                    // and remove the version data, etc from the csv
-                    int Index = Response.ProductInfo.IndexOf("\"SKU\",");
+                    ProductOffer Offer = ProductOffer.FromJson(Response.ProductInfo);
 
-                    // Will hold the stream of price data content that the 
-                    // transfer utility will send
+                    // Get the products that are actual instances
+                    HashSet<string> ApplicableProductSkus = new HashSet<string>(
+                        Offer.Products.Where(x =>
+                        {
+                            var Attributes = x.Value.Attributes.ToDictionary(y => y.Key, y => y.Value, StringComparer.OrdinalIgnoreCase);
+
+                            return Attributes.ContainsKey("instancetype") &&
+                                Attributes.ContainsKey("usagetype") &&
+                                Attributes.ContainsKey("operation") &&
+                                Attributes.ContainsKey("servicecode");
+                        })
+                        .Select(x => x.Key).Distinct()
+                    );
+
+                    this._Context.LogInfo($"Found {ApplicableProductSkus.Count} applicable products for {Response.ServiceCode}.");
+
+                    // Serialize the data into CSV and write it to an output stream
                     MemoryStream MStreamOut = new MemoryStream();
                     Disposables.Add(MStreamOut);
 
-                    // Provided to the csv writer to write to the memory stream
-                    TextWriter SWriter = new StreamWriter(MStreamOut);
+                    StreamWriter SWriter = new StreamWriter(MStreamOut);
                     Disposables.Add(SWriter);
 
-                    // The csv writer to write the price data objects
                     CsvWriter Writer = new CsvWriter(SWriter);
-                    Disposables.Add(Writer);
 
-                    // Set the header in the output
+                    // Write all of the CSV data to the stream
                     Writer.WriteHeader<ReservedInstancePricingTerm>();
                     Writer.NextRecord();
 
-                    using (MemoryStream MStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(Response.ProductInfo, Index, Response.ProductInfo.Length - Index)))
+                    // This leaves us with 1 row per unique configuration, the row contains
+                    // pricing information for a specific purchase option, like 1 year all upfront standard
+                    // or 3 year partial upfront convertible, or on demand
+                    //List<ReservedInstancePricingTerm> Terms = Offer.Terms
+                    //   .SelectMany(x => x.Value) // Get all of the product item dictionaries from on demand and reserved
+                    //   .Where(x => ApplicableProductSkus.Contains(x.Key)) // Only get the pricing terms for products we care about
+                    //   .SelectMany(x => x.Value) // Get all of the pricing term key value pairs
+                    //   .Select(x => x.Value) // Get just the pricing terms
+                    //   .GroupBy(x => x.Sku) // Put all of the same skus together
+                    //   .SelectMany(x => TryGet(x, Offer.Products[x.Key])).ToList(); // Take all the pricing terms and convert them
+
+                    foreach (IGrouping<string, PricingTerm> CommonSkus in Offer.Terms
+                       .SelectMany(x => x.Value) // Get all of the product item dictionaries from on demand and reserved
+                       .Where(x => ApplicableProductSkus.Contains(x.Key)) // Only get the pricing terms for products we care about
+                       .SelectMany(x => x.Value) // Get all of the pricing term key value pairs
+                       .Select(x => x.Value) // Get just the pricing terms
+                       .GroupBy(x => x.Sku)) // Put all of the same skus together
                     {
-                        using (StreamReader SReader = new StreamReader(MStream))
+                        try
                         {
-                            using (CsvReader Reader = new CsvReader(SReader))
-                            {
-                                // Make all of the headers lowercase so we don't have to worry about
-                                // case sensitivity later
-                                Reader.Configuration.PrepareHeaderForMatch = Header => Header.ToLower();
+                            IEnumerable<ReservedInstancePricingTerm> Terms = ReservedInstancePricingTerm.Build(CommonSkus, Offer.Products[CommonSkus.Key]);
+                            Writer.WriteRecords<ReservedInstancePricingTerm>(Terms);
+                        }
+                        catch (Exception e)
+                        {
+                            this._Context.LogError(e);
+                        }
+                    }
 
-                                Reader.Read(); // Advance to the next row, which is the header row
-                                Reader.ReadHeader(); // Read the headers
+                    this._Context.LogInfo($"Completed generating reserved instance pricing terms for {Response.ServiceCode}");
 
-                                List<CsvRowItem> Rows = new List<CsvRowItem>();
-
-                                while (Reader.Read()) // Read all lines in the CSV
-                                {
-                                    // Will return null if it's a record we're not concerned about
-                                    CsvRowItem Row = CsvRowItem.Build(Reader);
-
-                                    if (Row != null)
-                                    {
-                                        Rows.Add(Row);
-                                    }
-                                } // Close while loop
-
-                                foreach (ReservedInstancePricingTerm Term in Rows.GroupBy(x => x.Sku).SelectMany(x => ReservedInstancePricingTerm.Build(x)))
-                                {
-                                    Writer.WriteRecord<ReservedInstancePricingTerm>(Term);
-                                    Writer.NextRecord();
-                                }
-                            } // Close CsvReader
-                        } // Close StreamReader
-                    } // Close Memory input stream
-
-                    // Make sure everything is written out since we don't dispose
-                    // of these till later, if the textwriter isn't flushed
-                    // you will lose content from the csv file
-                    SWriter.Flush();
+                    // Flush the Writers here since they don't get disposed of until later
                     Writer.Flush();
+                    SWriter.Flush();
 
                     // Make the transfer utility request to post the price data csv content
                     TransferUtilityUploadRequest Request = new TransferUtilityUploadRequest()
@@ -189,8 +198,8 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter
                         AutoCloseStream = true
                     };
 
-                    this._Context.LogInfo($"Starting upload for:        {Response.ServiceCode}");
-                    this._Context.LogInfo($"Output stream length:       {MStreamOut.Length}");
+                    this._Context.LogInfo($"Starting upload for:  {Response.ServiceCode}.");
+                    this._Context.LogInfo($"Output stream length: {MStreamOut.Length}");
 
                     // Make the upload and record the task so we can wait for it finish
                     await XferUtil.UploadAsync(Request);

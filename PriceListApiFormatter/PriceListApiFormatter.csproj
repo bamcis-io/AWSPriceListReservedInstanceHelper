@@ -9,7 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Amazon.Lambda.Core" Version="1.0.0" />
     <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="1.2.0" />
-    <PackageReference Include="AWSPriceListApi" Version="2.2.3" />
+    <PackageReference Include="AWSPriceListApi" Version="2.3.0" />
     <PackageReference Include="AWSSDK.Lambda" Version="3.3.13.5" />
     <PackageReference Include="AWSSDK.S3" Version="3.3.18.5" />
     <PackageReference Include="BAMCIS.AWSLambda.Common" Version="1.2.0" />
