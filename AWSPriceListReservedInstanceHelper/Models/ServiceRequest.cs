@@ -1,7 +1,10 @@
 ﻿using Newtonsoft.Json;
 
-namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
+namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 {
+    /// <summary>
+    /// A request to get the price list data for the specified service
+    /// </summary>
     public class ServiceRequest
     {
         #region Public Properties

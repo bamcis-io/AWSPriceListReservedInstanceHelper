@@ -244,7 +244,7 @@
                         "Ref" : "LambdaExecutionRole"
                     },
 					{
-                        "Ref" : "LambdaExecutionRole"
+                        "Ref" : "LambdaSplitterExecutionRole"
                     }
                 ]
             }
@@ -301,7 +301,7 @@
                         "Ref" : "LambdaExecutionRole"
                     },
 					{
-                        "Ref" : "LambdaExecutionRole"
+                        "Ref" : "LambdaSplitterExecutionRole"
                     }
                 ]
             }

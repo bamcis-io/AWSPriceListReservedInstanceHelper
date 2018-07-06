@@ -4,8 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
-namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
+namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 {
     /// <summary>
     /// This class represents the combination of multiple price dimensions for a single
@@ -22,6 +23,9 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
         /// </summary>
         private List<string> ErrorMessages = new List<string>();
 
+        // This should be used only after removing commas from the input string
+        private static readonly Regex _MemoryRegex = new Regex(@"^\s*([0-9]+(?:\.?[0-9]+)?)\s+GiB\s*$", RegexOptions.IgnoreCase);
+
         #endregion
 
         #region Public Properties
@@ -35,11 +39,6 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
         /// The code specific to the offer term, the key for the term is SKU.OfferTermCode, like 76V3SF2FJC3ZR3GH.JRTCKXETXF
         /// </summary>
         public string OfferTermCode { get; }
-
-        /// <summary>
-        /// The description of the pricing term, like "$0.42 per On Demand Windows with SQL Web c5.xlarge Instance Hour"
-        /// </summary>
-        public string Description { get; }
 
         /// <summary>
         /// The platform of the product, like Linux, RHEL, MySQL, SQL Server Web BYOL, Oracle EE, ElastiCache Redis, etc
@@ -154,18 +153,38 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
         /// <summary>
         /// The maximum savings from using the reserved instance as a percent over the on demand costs
         /// </summary>
-        public string PercentSavings { get; }
+        public double PercentSavings { get; }
+
+        /// <summary>
+        /// The number of vCPUs for the instance
+        /// </summary>
+        public int vCPU { get; }
+
+        /// <summary>
+        /// The amount of RAM on the instance, measured in GiB
+        /// </summary>
+        public double Memory { get; }
 
         #endregion
 
         #region Constructors
 
         /// <summary>
-        /// Creates a new consolidated pricing term
+        /// Creates a new reserved instance pricing term
         /// </summary>
         /// <param name="sku"></param>
         /// <param name="offerTermCode"></param>
-        /// <param name="description"></param>
+        /// <param name="service"></param>
+        /// <param name="platform"></param>
+        /// <param name="operatingSystem"></param>
+        /// <param name="instanceType"></param>
+        /// <param name="operation"></param>
+        /// <param name="usageType"></param>
+        /// <param name="tenancy"></param>
+        /// <param name="region"></param>
+        /// <param name="vcpus"></param>
+        /// <param name="memory"></param>
+        /// <param name="onDemandHourlyCost"></param>
         /// <param name="adjustedPricePerUnit"></param>
         /// <param name="upfrontFee"></param>
         /// <param name="leaseTerm"></param>
@@ -177,7 +196,6 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
             string sku,
             string offerTermCode,
             string service,
-            string description,
             string platform,
             string operatingSystem,
             string instanceType,
@@ -185,6 +203,8 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
             string usageType,
             string tenancy,
             string region,
+            int vcpus,
+            double memory,
             double onDemandHourlyCost,
             double adjustedPricePerUnit,
             double upfrontFee,
@@ -197,7 +217,6 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
             this.Sku = sku;
             this.OfferTermCode = offerTermCode;
             this.Service = service;
-            this.Description = description;
             this.Platform = platform;
             this.OperatingSystem = operatingSystem;
             this.InstanceType = instanceType;
@@ -205,6 +224,8 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
             this.UsageType = usageType;
             this.Tenancy = tenancy;
             this.Region = region;
+            this.vCPU = vcpus;
+            this.Memory = memory;
             this.OnDemandHourlyCost = onDemandHourlyCost;
             this.AdjustedPricePerUnit = adjustedPricePerUnit;
             this.UpfrontFee = upfrontFee;
@@ -232,11 +253,11 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
 
             if (this.OnDemandCostForTerm > 0)
             {
-                this.PercentSavings = ((1 - (ReservedInstanceCost / OnDemandCostForTerm)) * 100).ToString("F") + "%";
+                this.PercentSavings = Math.Round(((1 - (ReservedInstanceCost / OnDemandCostForTerm)) * 100), 3);
             }
             else
             {
-                this.PercentSavings = "0%";
+                this.PercentSavings = 0;
             }
         }
 
@@ -306,7 +327,6 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                         }
                     });
 
-                    string Description = String.Empty;
                     double HourlyRecurring = 0;
 
                     // Only check for recurring, since some may have no upfront
@@ -317,8 +337,6 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                     }
                     else
                     {
-                        Description = Recurring.Description;
-
                         // Parse out the rate
                         if(!Double.TryParse(Recurring.PricePerUnit.First().Value, out HourlyRecurring))
                         {
@@ -348,11 +366,31 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                         OperatingSystem = Platform;
                     }
 
+                    int vCPU = 0;
+
+                    if (product.Attributes.ContainsKey("vcpu"))
+                    {
+                        Int32.TryParse(product.Attributes.GetValueOrDefault("vcpu"), out vCPU);
+                    }
+
+                    double Memory = 0;
+
+                    if (product.Attributes.ContainsKey("memory"))
+                    {
+                        string MemoryString = product.Attributes.GetValueOrDefault("memory").Replace(",", "");
+
+                        Match MemoryMatch = _MemoryRegex.Match(MemoryString);
+
+                        if (MemoryMatch.Success)
+                        {
+                            Double.TryParse(MemoryMatch.Groups[1].Value, out Memory);
+                        }                       
+                    }
+
                     yield return new ReservedInstancePricingTerm(
                         Term.Sku,
                         Term.OfferTermCode,
                         product.Attributes.GetValueOrDefault("servicecode"),
-                        Description,
                         Platform,
                         OperatingSystem,
                         product.Attributes.GetValueOrDefault("instancetype"),
@@ -360,6 +398,8 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                         product.Attributes.GetValueOrDefault("usagetype"),
                         Tenancy,
                         Region,
+                        vCPU,
+                        Memory,
                         OnDemandCost,
                         HourlyRecurring,
                         UpfrontFee,
@@ -397,13 +437,12 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                     OnDemandCost = OnDemand.PricePerUnit;
                 }
 
-                foreach (IGrouping<string, CsvRowItem> Group in commonSkus.GroupBy(x => x.Key))
+                foreach (IGrouping<string, CsvRowItem> Group in commonSkus.Where(x => x.PurchaseOption != PurchaseOption.ON_DEMAND).GroupBy(x => x.Key))
                 {
                     CsvRowItem Upfront = Group.FirstOrDefault(x => x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
 
                     CsvRowItem Recurring = Group.FirstOrDefault(x => !x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
-  
-                    string Description = String.Empty;
+
                     double HourlyRecurring = 0;
 
                     // Only check for recurring, since some may have no upfront
@@ -414,7 +453,6 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                     }
                     else
                     {
-                        Description = Recurring.Description;
                         HourlyRecurring = Recurring.PricePerUnit;
                     }
 
@@ -427,12 +465,10 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
 
                     string OperatingSystem = Group.First().OperatingSystem;
 
-
                     yield return new ReservedInstancePricingTerm(
                         Group.First().Sku,
                         Group.First().OfferTermCode,
                         Group.First().ServiceCode,
-                        Description,
                         Group.First().Platform,
                         OperatingSystem,
                         Group.First().InstanceType,
@@ -440,13 +476,15 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                         Group.First().UsageType,
                         Group.First().Tenancy,
                         Group.First().Region,
+                        Group.First().vCPU,
+                        Group.First().Memory,
                         OnDemandCost,
                         HourlyRecurring,
                         UpfrontFee,
                         Group.First().LeaseContractLength,
                         Group.First().PurchaseOption,
                         Group.First().OfferingClass,
-                        AWSPriceListApi.Serde.Term.RESERVED
+                        Term.RESERVED
                     );
                 }
             }

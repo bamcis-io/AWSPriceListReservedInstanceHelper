@@ -4,13 +4,16 @@ using System;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
+namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 {
     public class CsvRowItem
     {
         #region Private Fields
 
         private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage)", RegexOptions.IgnoreCase);
+
+        // This should be used only after removing commas from the input string
+        private static readonly Regex _MemoryRegex = new Regex(@"^\s*([0-9]+(?:\.?[0-9]+)?)\s+GiB\s*$", RegexOptions.IgnoreCase);
 
         #endregion
 
@@ -25,6 +28,10 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
         public int LeaseContractLength { get; }
 
         public double PricePerUnit { get; }
+
+        public int vCPU { get; }
+
+        public double Memory { get; }
 
         public PurchaseOption PurchaseOption { get; }
 
@@ -60,6 +67,8 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
             Term termType,
             int leaseContractLength,
             double pricePerUnit,
+            int vcpu,
+            double memory,
             PurchaseOption purchaseOption,
             OfferingClass offeringClass,
             string tenancy,
@@ -78,6 +87,8 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
             this.TermType = termType;
             this.LeaseContractLength = leaseContractLength;
             this.PricePerUnit = pricePerUnit;
+            this.vCPU = vcpu;
+            this.Memory = memory;
             this.PurchaseOption = purchaseOption;
             this.OfferingClass = offeringClass;
             this.Tenancy = tenancy;
@@ -112,24 +123,40 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                 reader.TryGetField<string>("leasecontractlength", out string LeaseContractLength);
                 reader.TryGetField<string>("pricedescription", out string PriceDescription);
                 reader.TryGetField<string>("offertermcode", out string OfferTermCode);
+                reader.TryGetField<int>("vcpu", out int vCPU);
+                reader.TryGetField<string>("memory", out string MemoryString);
+
+                double Memory = 0;
+
+                if (!String.IsNullOrEmpty(MemoryString))
+                {
+                    MemoryString = MemoryString.Replace(",", "");
+
+                    Match MemoryMatch = _MemoryRegex.Match(MemoryString);
+
+                    if (MemoryMatch.Success)
+                    {
+                        Double.TryParse(MemoryMatch.Groups[1].Value, out Memory);
+                    }
+                }
 
                 Term TermType = Term.ON_DEMAND;
 
-                if (reader.TryGetField<string>("term type", out string TermString))
+                if (reader.TryGetField<string>("termtype", out string TermString))
                 {
                     TermType = EnumConverters.ConvertToTerm(TermString);
                 }
 
                 PurchaseOption PurchaseOption = PurchaseOption.ON_DEMAND;
 
-                if (reader.TryGetField<string>("purchase option", out string PurchaseOptionString))
+                if (reader.TryGetField<string>("purchaseoption", out string PurchaseOptionString))
                 {
                     PurchaseOption = EnumConverters.ConvertToPurchaseOption(PurchaseOptionString);
                 }
 
                 OfferingClass OfferingClass = OfferingClass.STANDARD;
 
-                if (reader.TryGetField<string>("offering class", out string OfferingClassString))
+                if (reader.TryGetField<string>("offeringclass", out string OfferingClassString))
                 {
                     OfferingClass = EnumConverters.ConvertToOfferingClass(OfferingClassString);
                 }
@@ -157,6 +184,8 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                     TermType,
                     Lease,
                     PricePerUnit,
+                    vCPU,
+                    Memory,
                     PurchaseOption,
                     OfferingClass,
                     Tenancy,
@@ -168,7 +197,7 @@ namespace BAMCIS.LambdaFunctions.PriceListApiFormatter.Models
                     ServiceCode,
                     RegionMapper.GetRegionFromUsageType(UsageType),
                     PriceDescription
-                    );
+                );
             }
             else
             {

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace BAMCIS.LambdaFunctions.PriceListApiFormatter
+namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 {
     public static class DictionaryHelpers
     {
