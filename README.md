@@ -6,6 +6,7 @@ queried through tools like Athena or EMR.
 
 ## Table of Contents
 - [Usage](#usage)
+- [Notifications](#notifications)
 - [Revision History](#revision-history)
 
 ## Usage
@@ -35,7 +36,7 @@ Here's some example data from a simple Athena query:
 | 223BX6UNNB3JE9ET | 38NPMPTW36    | SUSE     | Shared  | RunInstances:000g | USW2-BoxUsage:r4.xlarge | us-west-2 | AmazonEC2 | r4.xlarge    | SUSE            | 0.066                | 0.366              | 0.362269298         | 1750       | 3         | PARTIAL_UPFRONT | STANDARD      | RESERVED | 3::PARTIAL_UPFRONT::STANDARD    | 3484.48              | 9618.48             | 6134        | 63.773         | 4    | 30.5   |
 | 223BX6UNNB3JE9ET | Z2E3P23VKM    | SUSE     | Shared  | RunInstances:000g | USW2-BoxUsage:r4.xlarge | us-west-2 | AmazonEC2 | r4.xlarge    | SUSE            | 0.1647               | 0.366              | 0.45                | 0          | 3         | NO_UPFRONT      | CONVERTIBLE   | RESERVED | 3::NO_UPFRONT::CONVERTIBLE      | 4328.316             | 9618.48             | 5290.164    | 55             | 4    | 30.5   |
 
-Additional data has been added to each row to easily identify the breakeven utilization percentage where purchasing the RI is most cost
+Additional data has been added to each row to easily identify the breakeven utilization percentage where purchasing the RI is more cost
 effective than paying the on demand costs as well as the percent savings and the standard on-demand hourly cost. This gives a robust way
 to quickly view and analyze current RI pricing as well as combine this data with actual usage data from AWS Cost and Usage Reports (aka billing
 files) to generate Reserved Instance purchase recommendations.
@@ -45,6 +46,12 @@ a different delimiter by providing an environment variable, `DELIMITER`, to the 
 as an environment variable, `BUCKET`. The secondary function is identified to the first function as an environment variable `FunctionName`. Lastly,
 this format of the price list data that the second lambda function pulls down is specified by the `PRICELIST_FORMAT` environment variable. If it's not
 set or doesn't match an expected value, `csv` is used.
+
+## Notifications
+Both Lambda functions accept an environment variable `SNS` that is an ARN to an SNS topic. When an exception is encountered during processing that
+would normally end execution, an SNS notification can be sent to the specified topic. All other exceptions, warnings, and info are logged to CloudWatch
+Logs. You could also pair these functions with a function that sent an SNS message on a `PutObject` S3 action to notify you that new RI pricing data
+files have been delivered.
 
 ## Revision History
 

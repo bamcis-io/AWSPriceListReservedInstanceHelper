@@ -3,6 +3,7 @@ using Amazon.Lambda.Core;
 using Amazon.Lambda.Model;
 using Amazon.S3;
 using Amazon.S3.Transfer;
+using Amazon.SimpleNotificationService;
 using BAMCIS.AWSLambda.Common;
 using BAMCIS.AWSLambda.Common.Events;
 using BAMCIS.AWSPriceListApi;
@@ -18,11 +19,10 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
-//[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.Json.JsonSerializer))]
+[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.Json.JsonSerializer))]
 
 namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 {
-
     /// <summary>
     /// The class that Lambda will call to invoke the Exec method
     /// </summary>
@@ -35,6 +35,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         private PriceListClient _PriceListClient;
         private IAmazonS3 _S3Client;
         private AmazonLambdaClient _LambdaClient;
+        private IAmazonSimpleNotificationService _SNSClient;
 
         // Use the pipe so that commas in strings don't cause an issue
         private static readonly string _DefaultDelimiter = "|";
@@ -53,6 +54,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             this._PriceListClient = new PriceListClient();
             this._S3Client = new AmazonS3Client();
             this._LambdaClient = new AmazonLambdaClient();
+            this._SNSClient = new AmazonSimpleNotificationServiceClient();
         }
 
         #endregion
@@ -71,16 +73,36 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 
             foreach (string Service in _Services)
             {
-                InvokeRequest Req = new InvokeRequest()
+                try
                 {
-                    FunctionName = System.Environment.GetEnvironmentVariable("FunctionName"),
-                    Payload = $"{{\"service\":\"{Service}\"}}",
-                    InvocationType = InvocationType.Event,
-                    ClientContext = JsonConvert.SerializeObject(context.ClientContext, Formatting.None),
-                };
+                    InvokeRequest Req = new InvokeRequest()
+                    {
+                        FunctionName = System.Environment.GetEnvironmentVariable("FunctionName"),
+                        Payload = $"{{\"service\":\"{Service}\"}}",
+                        InvocationType = InvocationType.Event,
+                        ClientContext = JsonConvert.SerializeObject(context.ClientContext, Formatting.None),
+                    };
 
-                InvokeResponse Res = await this._LambdaClient.InvokeAsync(Req);
-                context.LogInfo($"Completed kickoff for {Service} with http status {(int)Res.StatusCode}.");
+                    InvokeResponse Res = await this._LambdaClient.InvokeAsync(Req);
+                    context.LogInfo($"Completed kickoff for {Service} with http status {(int)Res.StatusCode}.");
+                }
+                catch (Exception e)
+                {
+                    this._Context.LogError(e);
+                    string SnsTopic = System.Environment.GetEnvironmentVariable("SNS");
+                    if (!String.IsNullOrEmpty(SnsTopic))
+                    {
+                        try
+                        {
+                            string Message = $"[ERROR] {DateTime.Now} {{{this._Context.AwsRequestId}}} : There was a problem creating a lambda invocation request for service {Service} - {e.Message}";
+                            await this._SNSClient.PublishAsync(SnsTopic, Message, "[ERROR] AWS Price List Reserved Instance Helper");
+                        }
+                        catch (Exception e2)
+                        {
+                            this._Context.LogError("Failed to send SNS message on exception", e2);
+                        }
+                    }
+                }
             }
 
             context.LogInfo("All kickoff requests completed.");
@@ -148,30 +170,17 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 Writer.WriteHeader<ReservedInstancePricingTerm>();
                 Writer.NextRecord();
 
+                // Create the product request with the right format
                 GetProductRequest ProductRequest = new GetProductRequest(req.Service)
                 {
-                    Format = InputFormat.Equals("csv") ? Format.CSV : Format.JSON
+                    Format = InputFormat.Equals("json", StringComparison.OrdinalIgnoreCase) ? Format.JSON : Format.CSV
                 };
 
                 // Retrieve the finished get product price data response
                 GetProductResponse Response = await this._PriceListClient.GetProductAsync(ProductRequest);
 
-                switch (InputFormat)
-                {
-                    default:
-                    case "csv":
-                        {
-                            // Fills the memory output stream
-                            this.GetFromCsv(Response.ProductInfo, Writer);
-                            break;
-                        }
-                    case "json":
-                        {
-                            // Fills the memory output stream
-                            this.GetFromJson(Response.ProductInfo, Writer);
-                            break;
-                        }
-                }
+                // Fill the output stream
+                this.FillOutputStreamWriter(Response.ProductInfo, Writer, ProductRequest.Format);
 
                 // Make sure everything is written out since we don't dispose
                 // of these till later, if the textwriter isn't flushed
@@ -200,6 +209,24 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 
                 this._Context.LogInfo("Completed upload");
             }
+            catch (Exception e)
+            {
+                this._Context.LogError(e);
+
+                string SnsTopic = System.Environment.GetEnvironmentVariable("SNS");
+                if (!String.IsNullOrEmpty(SnsTopic))
+                {
+                    try
+                    {
+                        string Message = $"[ERROR] {DateTime.Now} {{{this._Context.AwsRequestId}}} : There was a problem executing lambda for service {req.Service} - {e.Message}";
+                        await this._SNSClient.PublishAsync(SnsTopic, Message, "[ERROR] AWS Price List Reserved Instance Helper");
+                    }
+                    catch (Exception e2)
+                    {
+                        this._Context.LogError("Failed to send SNS message on exception", e2);
+                    }
+                }
+            }
             finally
             {
                 // Dispose all of the streams and writers used to
@@ -215,16 +242,42 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                     }
                     catch { }
                 }
-            }
 
-            // Make sure memory is cleaned up
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+                // Make sure memory is cleaned up
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }        
         }
 
         #endregion
 
         #region Private Functions
+
+        /// <summary>
+        /// Fills the csvwriter with the data from the product infor
+        /// </summary>
+        /// <param name="productInfo">The product info data</param>
+        /// <param name="writer">The csv writer to fill</param>
+        /// <param name="format">The format of the product info data</param>
+        private void FillOutputStreamWriter(string productInfo, CsvWriter writer, Format format)
+        {
+            switch (format)
+            {
+                default:
+                case Format.CSV:
+                    {
+                        // Fills the memory output stream
+                        this.GetFromCsv(productInfo, writer);
+                        break;
+                    }
+                case Format.JSON:
+                    {
+                        // Fills the memory output stream
+                        this.GetFromJson(productInfo, writer);
+                        break;
+                    }
+            }
+        }
 
         /// <summary>
         /// Converts the price list data from csv into our formatted csv
@@ -236,10 +289,6 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             // Find the the beginning of the header line
             // and remove the version data, etc from the csv
             int Index = csv.IndexOf("\"SKU\",");
-
-            // This holds the disposable stream and writer objects
-            // that need to be disposed at the end
-            List<IDisposable> Disposables = new List<IDisposable>();
 
             using (MemoryStream MStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(csv, Index, csv.Length - Index)))
             {
@@ -269,8 +318,15 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 
                         foreach (ReservedInstancePricingTerm Term in Rows.GroupBy(x => x.Sku).SelectMany(x => ReservedInstancePricingTerm.Build(x)))
                         {
-                            writer.WriteRecord<ReservedInstancePricingTerm>(Term);
-                            writer.NextRecord();
+                            try
+                            {
+                                writer.WriteRecord<ReservedInstancePricingTerm>(Term);
+                                writer.NextRecord();
+                            }
+                            catch (Exception e)
+                            {
+                                this._Context.LogError(e);
+                            }
                         }
                     } // Close CsvReader
                 } // Close StreamReader

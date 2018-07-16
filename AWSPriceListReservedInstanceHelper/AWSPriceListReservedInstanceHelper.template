@@ -93,7 +93,7 @@
         "SNSTopic" : {
             "Type" : "AWS::SNS::Topic",
             "Properties" : {
-                "DisplayName" : "PriceListApiFormatter",
+                "DisplayName" : "AWSPriceListReservedInstanceHelper",
                 "Subscription" : [
                     {
                         "Protocol" : "email",
@@ -102,7 +102,7 @@
                         }
                     }
                 ],
-                "TopicName"    : "PriceListApiFormatter_Notifications"
+                "TopicName"    : "AWSPriceListReservedInstanceHelperWorker_Notifications"
             }
         },
 
@@ -135,10 +135,10 @@
             }
         },
 
-        "LambdaExecutionRole" : {
+        "LambdaExecutionRoleWorker" : {
             "Type" : "AWS::IAM::Role",
             "Properties" : {
-                "RoleName" : "LambdaPriceListFormatterRole",
+                "RoleName" : "LambdaPriceListWorkerRole",
                 "AssumeRolePolicyDocument" : {
                     "Version" : "2012-10-17",
                     "Statement" : [
@@ -157,10 +157,10 @@
                 }
             }
         },
-		"LambdaSplitterExecutionRole" : {
+		"LambdaExecutionRoleDistributor" : {
             "Type" : "AWS::IAM::Role",
             "Properties" : {
-                "RoleName" : "LambdaPriceListSplitterRole",
+                "RoleName" : "LambdaPriceListDistributorRole",
                 "AssumeRolePolicyDocument" : {
                     "Version" : "2012-10-17",
                     "Statement" : [
@@ -213,10 +213,10 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRole"
+                        "Ref" : "LambdaExecutionRoleWorker"
                     },
 					{
-                        "Ref" : "LambdaSplitterExecutionRole"
+                        "Ref" : "LambdaExecutionRoleDistributor"
                     }
                 ]
             }
@@ -241,10 +241,10 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRole"
+                        "Ref" : "LambdaExecutionRoleWorker"
                     },
 					{
-                        "Ref" : "LambdaSplitterExecutionRole"
+                        "Ref" : "LambdaExecutionRoleDistributor"
                     }
                 ]
             }
@@ -271,7 +271,7 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRole"
+                        "Ref" : "LambdaExecutionRoleWorker"
                     }
                 ]
             }
@@ -298,10 +298,10 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRole"
+                        "Ref" : "LambdaExecutionRoleWorker"
                     },
 					{
-                        "Ref" : "LambdaSplitterExecutionRole"
+                        "Ref" : "LambdaExecutionRoleDistributor"
                     }
                 ]
             }
@@ -337,7 +337,7 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRole"
+                        "Ref" : "LambdaExecutionRoleWorker"
                     }
                 ]
             }
@@ -356,7 +356,7 @@
                             ],
                             "Resource" : [
                                 {
-                                    "Fn::GetAtt" : [ "PriceListFormatterFunction", "Arn"]
+                                    "Fn::GetAtt" : [ "AWSPriceListReservedInstanceHelperWorker", "Arn"]
                                 }
                             ]
                         }
@@ -364,16 +364,16 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaSplitterExecutionRole"
+                        "Ref" : "LambdaExecutionRoleDistributor"
                     }
                 ]
             }
         },
 
-        "CloudWatchLogGroup"  : {
+        "CloudWatchLogGroupWorker"  : {
             "Type" : "AWS::Logs::LogGroup",
             "Properties" : {
-                "LogGroupName" : "/aws/lambda/PriceListApiFormatter",
+                "LogGroupName" : "/aws/lambda/AWSPriceListReservedInstanceHelperWorker",
                 "RetentionInDays" : {
                     "Fn::If" : [
                         "InfiniteRetention",
@@ -387,10 +387,10 @@
                 }
             }
         },
-		"CloudWatchLogGroupSplitter"  : {
+		"CloudWatchLogGroupDistributor"  : {
             "Type" : "AWS::Logs::LogGroup",
             "Properties" : {
-                "LogGroupName" : "/aws/lambda/PriceListApiSplitter",
+                "LogGroupName" : "/aws/lambda/AWSPriceListReservedInstanceHelperDistributor",
                 "RetentionInDays" : {
                     "Fn::If" : [
                         "InfiniteRetention",
@@ -405,11 +405,11 @@
             }
         },
 
-        "PriceListFormatterFunction" : {
+        "AWSPriceListReservedInstanceHelperWorker" : {
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
-                "Handler" : "PriceListApiFormatter::BAMCIS.LambdaFunctions.PriceListApiFormatter.Entrypoint::Exec",
-				"FunctionName" : "PriceListApiFormatter",
+                "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::Exec",
+				"FunctionName" : "AWSPriceListReservedInstanceHelperWorker",
 				"Description": "Downloads the price list files and formats them for ingestion by Athena.",
                 "Runtime" : "dotnetcore2.0",
                 "CodeUri" : "",
@@ -417,7 +417,7 @@
                 "Timeout"    : 90,
                 "Role"       : {
                     "Fn::GetAtt" : [
-                        "LambdaExecutionRole",
+                        "LambdaExecutionRoleWorker",
                         "Arn"
                     ]
                 },
@@ -425,11 +425,14 @@
 				    "Variables" : {
 						"BUCKET" : {
 							"Ref" : "ResultsS3Bucket"
+						},
+						"SNS" : {
+							"Ref" : "SNSTopic"
 						}
 					}
 				},
                 "Tags"       : {
-                    "Name" : "PriceListApiFormatter",
+                    "Name" : "AWSPriceListReservedInstanceHelperWorker",
                     "Environment" : {
                         "Ref" : "EnvironmentTag"
                     },
@@ -443,10 +446,10 @@
             }
         },
 
-		"SplitterFunction" : {
+		"AWSPriceListReservedInstanceHelperDistributor" : {
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
-                "Handler" : "PriceListApiFormatter::BAMCIS.LambdaFunctions.PriceListApiFormatter.Entrypoint::Split",
+                "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::Split",
 				"FunctionName" : "PriceListApiSplitter",
 				"Description": "Kicks of the price list formatter functions.",
                 "Runtime" : "dotnetcore2.0",
@@ -455,14 +458,17 @@
                 "Timeout"    : 30,
                 "Role"       : {
                     "Fn::GetAtt" : [
-                        "LambdaSplitterExecutionRole",
+                        "LambdaExecutionRoleDistributor",
                         "Arn"
                     ]
                 },
 				"Environment" : {
 				    "Variables" : {
 						"FunctionName" : {
-							"Ref" : "PriceListFormatterFunction"
+							"Ref" : "AWSPriceListReservedInstanceHelperWorker"
+						},
+						"SNS" : {
+							"Ref" : "SNSTopic"
 						}
 					}
 				},
@@ -499,7 +505,7 @@
                     }
                 },
                 "Tags"       : {
-                    "Name" : "PriceListApiSplitter",
+                    "Name" : "AWSPriceListReservedInstanceHelperDistributor",
                     "Environment" : {
                         "Ref" : "EnvironmentTag"
                     },

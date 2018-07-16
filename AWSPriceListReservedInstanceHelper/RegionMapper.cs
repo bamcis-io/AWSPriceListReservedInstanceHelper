@@ -4,10 +4,20 @@ using System.Text.RegularExpressions;
 
 namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 {
+    /// <summary>
+    /// Performs mapping of usage type strings to the common region strings like
+    /// us-east-1. The price list only contains the long names of the Regions like
+    /// US East (N. Virginia) which are sometimes inconsistent (i.e. the 
+    /// Amazon.RegionEndpoint.USEast1 property returns US East (Virginia) without
+    /// the "N."
+    /// </summary>
     public static class RegionMapper
     {
         #region Private Fields
 
+        /// <summary>
+        /// The map of usage type prefix strings to the region strings
+        /// </summary>
         private static IDictionary<string, string> RegionMap = new Dictionary<string, string>()
         {
             { "", "us-east-1"},
@@ -30,18 +40,35 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             { "EUW3", "eu-west-3" }
         };
 
+        /// <summary>
+        /// The regex to parse out the regional prefix code from the usage type string
+        /// </summary>
         private static Regex UsageTypeParser = new Regex("^([a-zA-Z]{2,3}[0-9]*)-.*$");
 
         #endregion
 
-        #region Public Properties
+        #region Public Methods
 
+        /// <summary>
+        /// Retrieves the region of usage from the usage type string
+        /// </summary>
+        /// <param name="usageType"></param>
+        /// <returns></returns>
         public static string GetRegionFromUsageType(string usageType)
         {
             return GetRegion(ParseUsageType(usageType));
         }
 
-        public static string ParseUsageType(string usageType)
+        #endregion
+
+        #region Private Functions
+
+        /// <summary>
+        /// Gets the matching regional information from a usage type string
+        /// </summary>
+        /// <param name="usageType"></param>
+        /// <returns></returns>
+        private static string ParseUsageType(string usageType)
         {
             Match RegexMatch = UsageTypeParser.Match(usageType);
 
@@ -55,7 +82,12 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             }
         }
 
-        public static string GetRegion(string value)
+        /// <summary>
+        /// Retrieves the region from the dictionary based on the matching usage type prefix string
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        private static string GetRegion(string value)
         {
             if (RegionMap.ContainsKey(value))
             {
@@ -66,6 +98,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 return String.Empty;
             }
         }
+
 
         #endregion
     }

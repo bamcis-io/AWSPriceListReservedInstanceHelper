@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 {
+    /// <summary>
+    /// Supplies some convenience functions for working with dictionaries
+    /// </summary>
     public static class DictionaryHelpers
     {
         /// <summary>

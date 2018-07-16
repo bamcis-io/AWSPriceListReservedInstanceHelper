@@ -6,55 +6,121 @@ using System.Text.RegularExpressions;
 
 namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 {
+    /// <summary>
+    /// Represents a row of data from the price list API when presented in csv format
+    /// </summary>
     public class CsvRowItem
     {
         #region Private Fields
 
+        /// <summary>
+        /// All of the usage types that indicate usage that might have an RI associated with it
+        /// </summary>
         private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage)", RegexOptions.IgnoreCase);
 
-        // This should be used only after removing commas from the input string
+        /// <summary>
+        /// Finds the amount of memory allocated to an instance
+        /// This should be used only after removing commas from the input string
+        /// </summary>
         private static readonly Regex _MemoryRegex = new Regex(@"^\s*([0-9]+(?:\.?[0-9]+)?)\s+GiB\s*$", RegexOptions.IgnoreCase);
 
         #endregion
 
         #region Public Properties
 
+        /// <summary>
+        /// The produce sku
+        /// </summary>
         public string Sku { get; }
 
+        /// <summary>
+        /// The specific offer term code for the offering
+        /// </summary>
         public string OfferTermCode { get; }
 
+        /// <summary>
+        /// The type of the term, either OnDemand or Reserved
+        /// </summary>
         public Term TermType { get; }
 
+        /// <summary>
+        /// The length of the contract, typically 1 or 3 years
+        /// </summary>
         public int LeaseContractLength { get; }
 
+        /// <summary>
+        /// The price per unit of the line item, which might be an hourly recurring free or an upfront fee
+        /// </summary>
         public double PricePerUnit { get; }
 
+        /// <summary>
+        /// The number of virtual CPUs assigned to the instance
+        /// </summary>
         public int vCPU { get; }
 
+        /// <summary>
+        /// The amount of memory in GiB assigned to the instance
+        /// </summary>
         public double Memory { get; }
 
+        /// <summary>
+        /// The purchase option of the instance, like No Upfront, or All Upfront, or On Demand
+        /// </summary>
         public PurchaseOption PurchaseOption { get; }
 
+        /// <summary>
+        /// The offering class, either Standard or Convertible
+        /// </summary>
         public OfferingClass OfferingClass { get; }
 
+        /// <summary>
+        /// The tenancy of the instance, either Shared or Dedicated
+        /// </summary>
         public string Tenancy { get; }
 
+        /// <summary>
+        /// The instance type
+        /// </summary>
         public string InstanceType { get; }
 
+        /// <summary>
+        /// The platform of the instance
+        /// </summary>
         public string Platform { get; }
 
+        /// <summary>
+        /// The operating system or service, like Windows or Linux or RHEL or ElastiCache Redis
+        /// </summary>
         public string OperatingSystem { get; }
 
+        /// <summary>
+        /// The operation code
+        /// </summary>
         public string Operation { get; }
 
+        /// <summary>
+        /// The usage type code
+        /// </summary>
         public string UsageType { get; }
 
+        /// <summary>
+        /// The service code, like AmazonEC2
+        /// </summary>
         public string ServiceCode { get; }
 
+        /// <summary>
+        /// The region the price data is applicable to
+        /// </summary>
         public string Region { get; }
 
+        /// <summary>
+        /// The description of the charge, like Upfront Fee or $0.05 per instance hour
+        /// </summary>
         public string Description { get; }
 
+        /// <summary>
+        /// A key comprised of {lease term}::{purchase option}::{offering class}
+        /// </summary>
         public string Key { get; }
 
         #endregion
@@ -108,6 +174,12 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 
         #region Public Methods
 
+        /// <summary>
+        /// Builds a row item from the current line of the csv reader, this method
+        /// does not change the position of the csv reader
+        /// </summary>
+        /// <param name="reader">The csv reader to read from</param>
+        /// <returns></returns>
         public static CsvRowItem Build(CsvReader reader)
         {
             if (reader.TryGetField<string>("instance type", out string InstanceType)
@@ -209,6 +281,11 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 
         #region Private Methods
 
+        /// <summary>
+        /// Extracts the platform details from different attribute fields in the price list data
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <returns></returns>
         private static string GetPlatform(CsvReader reader)
         {
             StringBuilder Buffer = new StringBuilder();
