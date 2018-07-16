@@ -67,7 +67,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <param name="ev"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public async Task Split(CloudWatchScheduledEvent ev, ILambdaContext context)
+        public async Task LaunchWorkersAsync(CloudWatchScheduledEvent ev, ILambdaContext context)
         {
             List<Task<InvokeResponse>> Responses = new List<Task<InvokeResponse>>();
 
@@ -115,7 +115,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <param name="ev"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public async Task Exec(ServiceRequest req, ILambdaContext context)
+        public async Task RunForServiceAsync(ServiceRequest req, ILambdaContext context)
         {
             this._Context = context;
 
@@ -126,7 +126,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             }
 
             // Get the product price data for the service
-            Console.WriteLine($"Getting product data for {req.Service}");
+            this._Context.LogInfo($"Getting product data for {req.Service}");
 
             string Bucket = System.Environment.GetEnvironmentVariable("BUCKET");
             string Delimiter = System.Environment.GetEnvironmentVariable("DELIMITER");
@@ -176,8 +176,12 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                     Format = InputFormat.Equals("json", StringComparison.OrdinalIgnoreCase) ? Format.JSON : Format.CSV
                 };
 
+                this._Context.LogInfo("Getting price list offer file.");
+
                 // Retrieve the finished get product price data response
                 GetProductResponse Response = await this._PriceListClient.GetProductAsync(ProductRequest);
+
+                this._Context.LogInfo("Parsing price list data.");
 
                 // Fill the output stream
                 this.FillOutputStreamWriter(Response.ProductInfo, Writer, ProductRequest.Format);

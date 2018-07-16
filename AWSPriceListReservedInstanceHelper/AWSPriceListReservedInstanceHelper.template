@@ -102,7 +102,7 @@
                         }
                     }
                 ],
-                "TopicName"    : "AWSPriceListReservedInstanceHelperWorker_Notifications"
+                "TopicName"    : "AWSPriceListReservedInstanceHelper_Notifications"
             }
         },
 
@@ -408,9 +408,9 @@
         "AWSPriceListReservedInstanceHelperWorker" : {
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
-                "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::Exec",
+                "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::RunForServiceAsync",
 				"FunctionName" : "AWSPriceListReservedInstanceHelperWorker",
-				"Description": "Downloads the price list files and formats them for ingestion by Athena.",
+				"Description": "Downloads the price list file for a specified service and formats it for ingestion by Athena.",
                 "Runtime" : "dotnetcore2.0",
                 "CodeUri" : "",
                 "MemorySize" : 1920,
@@ -449,9 +449,9 @@
 		"AWSPriceListReservedInstanceHelperDistributor" : {
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
-                "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::Split",
-				"FunctionName" : "PriceListApiSplitter",
-				"Description": "Kicks of the price list formatter functions.",
+                "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::LaunchWorkersAsync",
+				"FunctionName" : "AWSPriceListReservedInstanceHelperDistributor",
+				"Description": "Kicks of the AWS price list formatter worker functions.",
                 "Runtime" : "dotnetcore2.0",
                 "CodeUri" : "",
                 "MemorySize" : 128,

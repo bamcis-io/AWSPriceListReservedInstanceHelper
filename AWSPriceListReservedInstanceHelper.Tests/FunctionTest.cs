@@ -38,7 +38,7 @@ namespace AWSPriceListReservedInstanceHelper.Tests
             Entrypoint Ep = new Entrypoint();
 
             // ACT
-            await Ep.Exec(SR, Context);
+            await Ep.RunForServiceAsync(SR, Context);
 
             // ASSERT
         }
@@ -68,7 +68,7 @@ namespace AWSPriceListReservedInstanceHelper.Tests
             Entrypoint Ep = new Entrypoint();
 
             // ACT
-            await Ep.Exec(SR, Context);
+            await Ep.RunForServiceAsync(SR, Context);
 
             // ASSERT
         }
