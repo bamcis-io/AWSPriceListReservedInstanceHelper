@@ -55,5 +55,8 @@ files have been delivered.
 
 ## Revision History
 
+### 1.0.1
+Updated CF template default parameter values. Updated to .NET Core 2.1.
+
 ### 1.0.0
 Initial release of the application.

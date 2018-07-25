@@ -1,13 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
     <RootNamespace>BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper</RootNamespace>
     <Authors>Michael Haken</Authors>
     <Company>bamcis.io</Company>
     <Copyright>BAMCIS</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <Version>1.0.1</Version>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</PackageProjectUrl>
+    <PackageLicenseUrl>https://raw.githubusercontent.com/bamcis-io/AWSPriceListReservedInstanceHelper/master/LICENSE</PackageLicenseUrl>
   </PropertyGroup>
 
   <ItemGroup>
