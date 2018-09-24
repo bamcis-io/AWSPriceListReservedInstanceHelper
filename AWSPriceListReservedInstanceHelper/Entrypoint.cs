@@ -31,7 +31,6 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         #region Private Fields
 
         private ILambdaContext _Context;
-        private static readonly IEnumerable<string> _Services = new string[] { "AmazonEC2", "AmazonRDS", "AmazonElastiCache" };
         private PriceListClient _PriceListClient;
         private IAmazonS3 _S3Client;
         private AmazonLambdaClient _LambdaClient;
@@ -40,7 +39,17 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         // Use the pipe so that commas in strings don't cause an issue
         private static readonly string _DefaultDelimiter = "|";
 
-        private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage)", RegexOptions.IgnoreCase);
+        /// <summary>
+        /// All of the usage types that indicate usage that might have an RI associated with it
+        /// 
+        /// InstanceUsage/Multi-AZUsage - RDS
+        /// BoxUsage/HeavyUsage/DedicatedUsage/HostBoxUsage - EC2
+        /// NodeUsage - ElastiCache
+        /// Node - Redshift
+        /// WriteCapacityUnit/ReadCapacityUnit - DynamoDB
+        /// </summary>
+        private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage|\bNode\b|WriteCapacityUnit|ReadCapacityUnit)", RegexOptions.IgnoreCase);
+
 
         #endregion
 
@@ -71,7 +80,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         {
             List<Task<InvokeResponse>> Responses = new List<Task<InvokeResponse>>();
 
-            foreach (string Service in _Services)
+            foreach (string Service in Constants.ReservableServices)
             {
                 try
                 {
@@ -352,10 +361,12 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 {
                     var Attributes = x.Value.Attributes.ToDictionary(y => y.Key, y => y.Value, StringComparer.OrdinalIgnoreCase);
 
-                    return Attributes.ContainsKey("instancetype") &&
-                        Attributes.ContainsKey("usagetype") &&
+                    return Attributes.ContainsKey("usagetype") &&
+                        _AllUsageTypes.IsMatch(Attributes["usagetype"]) && 
                         Attributes.ContainsKey("operation") &&
-                        Attributes.ContainsKey("servicecode");
+                        Attributes.ContainsKey("servicecode") &&
+                        (Constants.InstanceBasedReservableServices.Contains(Attributes["servicecode"]) ? Attributes.ContainsKey("instancetype") : true); // DynamoDB does not
+                        // contain that particular attribute, but ElastiCache, EC2, RDS, and RedShift do
                 })
                 .Select(x => x.Key).Distinct()
             );

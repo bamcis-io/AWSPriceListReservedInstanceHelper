@@ -387,15 +387,24 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                         }                       
                     }
 
+                    string UsageType = product.Attributes.GetValueOrDefault("usagetype");
+
+                    string InstanceType = UsageType;
+
+                    if (product.Attributes.ContainsKey("instancetype"))
+                    {
+                        InstanceType = product.Attributes.GetValueOrDefault("usagetype");
+                    }
+
                     yield return new ReservedInstancePricingTerm(
                         Term.Sku,
                         Term.OfferTermCode,
                         product.Attributes.GetValueOrDefault("servicecode"),
                         Platform,
                         OperatingSystem,
-                        product.Attributes.GetValueOrDefault("instancetype"),
+                        InstanceType,
                         product.Attributes.GetValueOrDefault("operation"),
-                        product.Attributes.GetValueOrDefault("usagetype"),
+                        UsageType,
                         Tenancy,
                         Region,
                         vCPU,

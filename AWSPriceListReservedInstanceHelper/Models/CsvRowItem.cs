@@ -1,6 +1,7 @@
 ﻿using BAMCIS.AWSPriceListApi.Serde;
 using CsvHelper;
 using System;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -15,8 +16,14 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 
         /// <summary>
         /// All of the usage types that indicate usage that might have an RI associated with it
+        /// 
+        /// InstanceUsage/Multi-AZUsage - RDS
+        /// BoxUsage/HeavyUsage/DedicatedUsage/HostBoxUsage - EC2
+        /// NodeUsage - ElastiCache
+        /// Node - Redshift
+        /// WriteCapacityUnit/ReadCapacityUnit - DynamoDB
         /// </summary>
-        private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage)", RegexOptions.IgnoreCase);
+        private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage|\bNode\b|WriteCapacityUnit|ReadCapacityUnit)", RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Finds the amount of memory allocated to an instance
@@ -182,12 +189,16 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         /// <returns></returns>
         public static CsvRowItem Build(CsvReader reader)
         {
-            if (reader.TryGetField<string>("instance type", out string InstanceType)
-               && !String.IsNullOrEmpty(InstanceType)
+            string InstanceType = String.Empty;
+
+            // The field names are case sensitive
+            if (reader.TryGetField<string>("operation", out string Operation)
+               && !String.IsNullOrEmpty(Operation)
                && reader.TryGetField<string>("usagetype", out string UsageType)
                && _AllUsageTypes.IsMatch(UsageType)
                && reader.TryGetField<string>("servicecode", out string ServiceCode)
                && !String.IsNullOrEmpty(ServiceCode)
+               && (Constants.InstanceBasedReservableServices.Contains(ServiceCode) ? reader.TryGetField("instance type", out InstanceType) : true)
            )
             {
                 reader.TryGetField<string>("sku", out string Sku);
@@ -219,6 +230,12 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                     TermType = EnumConverters.ConvertToTerm(TermString);
                 }
 
+                if (String.IsNullOrEmpty(InstanceType))
+                {
+                    // This will probably only happen for DynamoDB
+                    InstanceType = UsageType;
+                }
+
                 PurchaseOption PurchaseOption = PurchaseOption.ON_DEMAND;
 
                 if (reader.TryGetField<string>("purchaseoption", out string PurchaseOptionString))
@@ -239,15 +256,20 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                     Tenancy = "Shared";
                 }
 
-                reader.TryGetField<string>("operation", out string Operation);
-
                 int Lease = String.IsNullOrEmpty(LeaseContractLength) ? 0 : Int32.Parse(Regex.Match(LeaseContractLength, "^([0-9]+)").Groups[1].Value);
 
                 string Platform = GetPlatform(reader);
 
                 if (!reader.TryGetField<string>("operating system", out string OperatingSystem))
                 {
-                    OperatingSystem = Platform;
+                    if (!String.IsNullOrEmpty(Platform))
+                    {
+                        OperatingSystem = Platform;
+                    }
+                    else
+                    {
+                        OperatingSystem = ServiceCode;
+                    }
                 }
 
                 return new CsvRowItem(
