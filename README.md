@@ -55,6 +55,9 @@ files have been delivered.
 
 ## Revision History
 
+### 1.1.1
+Fixed Redhsift and DynamoDB formatting.
+
 ### 1.1.0
 Added support for Redshift and DynamoDB.
 

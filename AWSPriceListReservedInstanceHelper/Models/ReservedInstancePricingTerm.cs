@@ -26,6 +26,9 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         // This should be used only after removing commas from the input string
         private static readonly Regex _MemoryRegex = new Regex(@"^\s*([0-9]+(?:\.?[0-9]+)?)\s+GiB\s*$", RegexOptions.IgnoreCase);
 
+        // The free tier string in the DynamoDB price dimension description
+        private static readonly string FREE_TIER = "(free tier)";
+
         #endregion
 
         #region Public Properties
@@ -294,9 +297,17 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                 else
                 {
                     // Get the on demand hourly cost
-                    if (!Double.TryParse(OnDemand.PriceDimensions.First().Value.PricePerUnit.First().Value, out OnDemandCost))
+                    // DynamoDB has free tier price dimensions in the same on demand object, so make 
+                    // sure we pick the first that does not have free tier in the description
+                    KeyValuePair<string, PriceDimension> Dimension = OnDemand.PriceDimensions.FirstOrDefault(x => !x.Value.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
+
+                    if (Dimension.Value == null)
                     {
-                        throw new FormatException($"Could not parse the on demand price {OnDemand.PriceDimensions.First().Value.PricePerUnit.First().Value} for sku: {commonSkus.Key}.");
+                        OnDemandCost = 0;
+                    }
+                    else if (!Double.TryParse(Dimension.Value.PricePerUnit.First().Value, out OnDemandCost))
+                    {
+                        throw new FormatException($"Could not parse the on demand price {Dimension.Value.PricePerUnit.First().Value} for sku: {commonSkus.Key}.");
                     }
                 }
 
@@ -434,7 +445,12 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         {
             if (commonSkus != null)
             {
-                CsvRowItem OnDemand = commonSkus.FirstOrDefault(x => x.PurchaseOption == PurchaseOption.ON_DEMAND);
+                // This probably needs a better check for whether a csv row item represents on demand
+                // free tier charges.
+                // Amazon DynamoDB - HBHVWY47CM => Free tier
+                // EC2, Redshift, RDS, ElastiCache do not include free tier charge dimensions in price
+                // list file as of 9/25/2018
+                CsvRowItem OnDemand = commonSkus.FirstOrDefault(x => x.PurchaseOption == PurchaseOption.ON_DEMAND && !x.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
                 double OnDemandCost = -1;
 
                 if (OnDemand == null)
@@ -648,6 +664,41 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                         {
                             Attributes.TryGetValue("cacheengine", out string CacheEngine);
                             Buffer.Append("ElastiCache ").Append(CacheEngine);
+                            break;
+                        }
+                    case "amazondynamodb":
+                        {
+                            Attributes.TryGetValue("group", out string Group);
+
+                            if (!String.IsNullOrEmpty(Group))
+                            {
+                                Buffer.Append(Group);
+                            }
+                            else
+                            {
+                                Buffer.Append("Amazon DynamoDB");
+                            }
+
+                            break;
+                        }
+                    case "amazonredshift":
+                        {
+                            Attributes.TryGetValue("usageFamily", out string UsageFamily);
+
+                            if (!String.IsNullOrEmpty(UsageFamily))
+                            {
+                                Buffer.Append(UsageFamily);
+                            }
+                            else
+                            {
+                                Buffer.Append("Amazon Redshift");
+                            }
+
+                            break;
+                        }
+                    default:
+                        {
+                            Buffer.Append("UNKNOWN SERVICE ").Append(ServiceCode);
                             break;
                         }
                 }

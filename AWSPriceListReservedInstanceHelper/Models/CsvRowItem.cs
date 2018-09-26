@@ -441,7 +441,48 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                     case "amazonelasticache":
                         {
                             reader.TryGetField("cache engine", out string CacheEngine);
-                            Buffer.Append("ElastiCache ").Append(CacheEngine);
+                            Buffer.Append("ElastiCache");
+
+                            if (!String.IsNullOrEmpty(CacheEngine))
+                            {
+                                Buffer.Append(" ").Append(CacheEngine);
+                            }
+
+                            break;
+                        }
+                    case "amazondynamodb":
+                        {
+                            reader.TryGetField("group", out string Group);
+
+                            if (!String.IsNullOrEmpty(Group))
+                            {
+                                Buffer.Append(Group);
+                            }
+                            else
+                            {
+                                Buffer.Append("Amazon DynamoDB");
+                            }
+
+                            break;
+                        }
+                    case "amazonredshift":
+                        {
+                            reader.TryGetField("usage family", out string UsageFamily);
+
+                            if (!String.IsNullOrEmpty(UsageFamily))
+                            {
+                                Buffer.Append(UsageFamily);
+                            }
+                            else
+                            {
+                                Buffer.Append("Amazon Redshift");
+                            }
+
+                            break;
+                        }
+                    default:
+                        {
+                            Buffer.Append("UNKNOWN SERVICE ").Append(ServiceCode);
                             break;
                         }
                 }
