@@ -16,7 +16,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
     public sealed class ReservedInstancePricingTerm
     {
         #region Private Fields
-        
+
         /// <summary>
         /// Will hold any error messages generated during creating the processing 
         /// of the reserved instance pricing terms
@@ -268,6 +268,19 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 
         #region Public Methods
 
+        public static IEnumerable<ReservedInstancePricingTerm> Build2(IGrouping<string, PricingTerm> commonSkus, Product product)
+        {
+            PricingTerm OnDemand = commonSkus.FirstOrDefault(x => x.TermAttributes.PurchaseOption == PurchaseOption.ON_DEMAND);
+            IEnumerable<PricingTerm> ReservedTerms = commonSkus.Where(x => x.TermAttributes.PurchaseOption != PurchaseOption.ON_DEMAND);
+
+            if (!ReservedTerms.Any() || OnDemand == null)
+            {
+                return Enumerable.Empty<ReservedInstancePricingTerm>();
+            }
+
+            return Build(product, OnDemand, ReservedTerms);
+        }
+
         /// <summary>
         /// Creates a consolidated pricing term from a regularly formatted pricing term
         /// that comes directly from the price list api
@@ -277,7 +290,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         public static IEnumerable<ReservedInstancePricingTerm> Build(IGrouping<string, PricingTerm> commonSkus, Product product)
         {
             if (commonSkus != null)
-            {               
+            {
                 string Platform = GetPlatform(product);
                 string Region = RegionMapper.GetRegionFromUsageType(product.Attributes.GetValueOrDefault("usagetype"));
 
@@ -349,12 +362,12 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                     else
                     {
                         // Parse out the rate
-                        if(!Double.TryParse(Recurring.PricePerUnit.First().Value, out HourlyRecurring))
+                        if (!Double.TryParse(Recurring.PricePerUnit.First().Value, out HourlyRecurring))
                         {
                             throw new FormatException($"Could not parse the recurring price per unit of {Recurring.PricePerUnit.First().Value} for sku {Term.Sku}, offer term code {Term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
                         }
                     }
-                    
+
                     double UpfrontFee = 0;
 
                     if (Upfront != null)
@@ -395,7 +408,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                         if (MemoryMatch.Success)
                         {
                             Double.TryParse(MemoryMatch.Groups[1].Value, out Memory);
-                        }                       
+                        }
                     }
 
                     string UsageType = product.Attributes.GetValueOrDefault("usagetype");
@@ -516,6 +529,165 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
             else
             {
                 throw new ArgumentNullException("commonSkus");
+            }
+        }
+
+        /// <summary>
+        /// Creates a consolidated pricing term from a regularly formatted pricing term
+        /// that comes directly from the price list API
+        /// </summary>
+        /// <param name="product"></param>
+        /// <param name="ondemand"></param>
+        /// <param name="reservedterms"></param>
+        /// <returns></returns>
+        public static IEnumerable<ReservedInstancePricingTerm> Build(Product product, PricingTerm ondemand, IEnumerable<PricingTerm> reservedterms)
+        {
+            if (product == null)
+            {
+                throw new ArgumentNullException("product");
+            }
+
+            if (ondemand == null)
+            {
+                throw new ArgumentNullException("ondemand");
+            }
+
+            if (reservedterms == null)
+            {
+                throw new ArgumentNullException("reservedterms");
+            }
+
+            if (!reservedterms.Any())
+            {
+                throw new ArgumentException("You must supply at least 1 reserved term.");
+            }
+
+            double OnDemandCost = -1;
+
+            // Get the on demand hourly cost
+            // DynamoDB has free tier price dimensions in the same on demand object, so make 
+            // sure we pick the first that does not have free tier in the description
+            KeyValuePair<string, PriceDimension> Dimension = ondemand.PriceDimensions.FirstOrDefault(x => !x.Value.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
+
+            if (Dimension.Value == null)
+            {
+                OnDemandCost = 0;
+            }
+            else if (!Double.TryParse(Dimension.Value.PricePerUnit.First().Value, out OnDemandCost))
+            {
+                throw new FormatException($"Could not parse the on demand price {Dimension.Value.PricePerUnit.First().Value} for sku: {product.Sku}.");
+            }
+
+            string Platform = GetPlatform(product);
+            string Region = RegionMapper.GetRegionFromUsageType(product.Attributes.GetValueOrDefault("usagetype"));
+
+            // Only EC2 has tenancy
+            if (!product.Attributes.TryGetValue("tenancy", out string Tenancy))
+            {
+                Tenancy = "Shared";
+            }
+
+            // Each pricing term will have the price dimensions for the upfront and recurring costs
+            foreach (PricingTerm Term in reservedterms)
+            {
+                PriceDimension Upfront = Term.PriceDimensions
+                    .Select(x => x.Value)
+                    .FirstOrDefault(x => !String.IsNullOrEmpty(x.Description) && x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
+
+                PriceDimension Recurring = Term.PriceDimensions
+                    .Select(x => x.Value)
+                    .FirstOrDefault(x => !String.IsNullOrEmpty(x.Description) && !x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
+
+                double HourlyRecurring = 0;
+
+                // Only check for recurring, since some may have no upfront
+                if (Recurring == null)
+                {
+                    // This should never happen
+                    throw new KeyNotFoundException($"The pricing term in {product.Attributes.GetValueOrDefault("servicecode")} for sku {Term.Sku} and offer term code {Term.OfferTermCode} did not contain a price dimension for hourly usage charges.");
+                }
+                else
+                {
+                    // Parse out the rate
+                    if (!Double.TryParse(Recurring.PricePerUnit.First().Value, out HourlyRecurring))
+                    {
+                        throw new FormatException($"Could not parse the recurring price per unit of {Recurring.PricePerUnit.First().Value} for sku {Term.Sku}, offer term code {Term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
+                    }
+                }
+
+                double UpfrontFee = 0;
+
+                if (Upfront != null)
+                {
+                    // Parse out upfront fee
+                    if (!Double.TryParse(Upfront.PricePerUnit.First().Value, out UpfrontFee))
+                    {
+                        throw new FormatException($"Could not parse the upfront cost of {Upfront.PricePerUnit.First().Value} for sku {Term.Sku}, offer term code {Term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
+                    }
+                }
+
+                string OperatingSystem = String.Empty;
+
+                if (product.Attributes.ContainsKey("operatingsystem"))
+                {
+                    OperatingSystem = product.Attributes.GetValueOrDefault("operatingsystem");
+                }
+                else
+                {
+                    OperatingSystem = Platform;
+                }
+
+                int vCPU = 0;
+
+                if (product.Attributes.ContainsKey("vcpu"))
+                {
+                    Int32.TryParse(product.Attributes.GetValueOrDefault("vcpu"), out vCPU);
+                }
+
+                double Memory = 0;
+
+                if (product.Attributes.ContainsKey("memory"))
+                {
+                    string MemoryString = product.Attributes.GetValueOrDefault("memory").Replace(",", "");
+
+                    Match MemoryMatch = _MemoryRegex.Match(MemoryString);
+
+                    if (MemoryMatch.Success)
+                    {
+                        Double.TryParse(MemoryMatch.Groups[1].Value, out Memory);
+                    }
+                }
+
+                string UsageType = product.Attributes.GetValueOrDefault("usagetype");
+
+                string InstanceType = UsageType;
+
+                if (product.Attributes.ContainsKey("instancetype"))
+                {
+                    InstanceType = product.Attributes.GetValueOrDefault("usagetype");
+                }
+
+                yield return new ReservedInstancePricingTerm(
+                    Term.Sku,
+                    Term.OfferTermCode,
+                    product.Attributes.GetValueOrDefault("servicecode"),
+                    Platform,
+                    OperatingSystem,
+                    InstanceType,
+                    product.Attributes.GetValueOrDefault("operation"),
+                    UsageType,
+                    Tenancy,
+                    Region,
+                    vCPU,
+                    Memory,
+                    OnDemandCost,
+                    HourlyRecurring,
+                    UpfrontFee,
+                    Term.TermAttributes.LeaseContractLength,
+                    Term.TermAttributes.PurchaseOption,
+                    Term.TermAttributes.OfferingClass,
+                    AWSPriceListApi.Serde.Term.RESERVED
+                );
             }
         }
 

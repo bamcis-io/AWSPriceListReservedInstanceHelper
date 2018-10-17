@@ -23,7 +23,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         /// Node - Redshift
         /// WriteCapacityUnit/ReadCapacityUnit - DynamoDB
         /// </summary>
-        private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage|\bNode\b|WriteCapacityUnit|ReadCapacityUnit)", RegexOptions.IgnoreCase);
+        private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage|\bNode\b|\bWriteCapacityUnit|\bReadCapacityUnit)", RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Finds the amount of memory allocated to an instance

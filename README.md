@@ -55,6 +55,9 @@ files have been delivered.
 
 ## Revision History
 
+### 1.2.0
+Updated how both csv and json files are processed and filtered.
+
 ### 1.1.1
 Fixed Redhsift and DynamoDB formatting.
 

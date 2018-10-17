@@ -12,6 +12,7 @@ using BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models;
 using CsvHelper;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -48,7 +49,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// Node - Redshift
         /// WriteCapacityUnit/ReadCapacityUnit - DynamoDB
         /// </summary>
-        private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage|\bNode\b|WriteCapacityUnit|ReadCapacityUnit)", RegexOptions.IgnoreCase);
+        private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage|\bNode\b|\bWriteCapacityUnit|\bReadCapacityUnit)", RegexOptions.IgnoreCase);
 
 
         #endregion
@@ -259,7 +260,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 // Make sure memory is cleaned up
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
-            }        
+            }
         }
 
         #endregion
@@ -298,7 +299,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <param name="csv"></param>
         /// <param name="writer"></param>
         private void GetFromCsv(string csv, CsvWriter writer)
-        {           
+        {
             // Find the the beginning of the header line
             // and remove the version data, etc from the csv
             int Index = csv.IndexOf("\"SKU\",");
@@ -329,23 +330,22 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                             }
                         } // Close while loop
 
-                        foreach (ReservedInstancePricingTerm Term in Rows.GroupBy(x => x.Sku).SelectMany(x => ReservedInstancePricingTerm.Build(x)))
+                        try
                         {
-                            try
-                            {
-                                writer.WriteRecord<ReservedInstancePricingTerm>(Term);
-                                writer.NextRecord();
-                            }
-                            catch (Exception e)
-                            {
-                                this._Context.LogError(e);
-                            }
+                            writer.WriteRecords<ReservedInstancePricingTerm>(
+                                Rows.GroupBy(x => x.Sku).SelectMany(x => ReservedInstancePricingTerm.Build(x))
+                            );
                         }
+                        catch (Exception e)
+                        {
+                            this._Context.LogError(e);
+                        }
+                        
                     } // Close CsvReader
                 } // Close StreamReader
             } // Close Memory input stream
         }
-
+      
         /// <summary>
         /// Converts the price list data from json into our formatted csv
         /// </summary>
@@ -355,32 +355,54 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         {
             ProductOffer Offer = ProductOffer.FromJson(json);
 
-            // Get the products that are actual instances
-            HashSet<string> ApplicableProductSkus = new HashSet<string>(
-                Offer.Products.Where(x =>
-                {
-                    var Attributes = x.Value.Attributes.ToDictionary(y => y.Key, y => y.Value, StringComparer.OrdinalIgnoreCase);
+            /*  
+             *  Old implementation, don't need such a complex grouping, just iterate
+             *  every sku in the reserved terms and only process the ones that have a matching
+             *  product and on demand term
+             * 
+             *   Hashset<string> ApplicableProductSkus = new Hashset<string>(Offer.Terms[Term.RESERVED].Keys)
+             * 
+             *   foreach (IGrouping<string, PricingTerm> CommonSkus in Offer.Terms
+             *          .SelectMany(x => x.Value) // Get all of the product item dictionaries from on demand and reserved
+             *          .Where(x => ApplicableProductSkus.Contains(x.Key)) // Only get the pricing terms for products we care about
+             *          .SelectMany(x => x.Value) // Get all of the pricing term key value pairs
+             *          .Select(x => x.Value) // Get just the pricing terms
+             *          .GroupBy(x => x.Sku)) // Put all of the same skus together
+             *   {
+             *       try
+             *       {
+             *           IEnumerable<ReservedInstancePricingTerm> Terms = ReservedInstancePricingTerm.Build2(CommonSkus, Offer.Products[CommonSkus.Key]);
+             *           writer.WriteRecords<ReservedInstancePricingTerm>(Terms);
+             *       }
+             *       catch (Exception e)
+             *       {
+             *           this._Context.LogError(e);
+             *       }
+             *   }
+             */
 
-                    return Attributes.ContainsKey("usagetype") &&
-                        _AllUsageTypes.IsMatch(Attributes["usagetype"]) && 
-                        Attributes.ContainsKey("operation") &&
-                        Attributes.ContainsKey("servicecode") &&
-                        (Constants.InstanceBasedReservableServices.Contains(Attributes["servicecode"]) ? Attributes.ContainsKey("instancetype") : true); // DynamoDB does not
-                        // contain that particular attribute, but ElastiCache, EC2, RDS, and RedShift do
-                })
-                .Select(x => x.Key).Distinct()
-            );
-
-            foreach (IGrouping<string, PricingTerm> CommonSkus in Offer.Terms
-                       .SelectMany(x => x.Value) // Get all of the product item dictionaries from on demand and reserved
-                       .Where(x => ApplicableProductSkus.Contains(x.Key)) // Only get the pricing terms for products we care about
-                       .SelectMany(x => x.Value) // Get all of the pricing term key value pairs
-                       .Select(x => x.Value) // Get just the pricing terms
-                       .GroupBy(x => x.Sku)) // Put all of the same skus together
+            foreach (string Sku in Offer.Terms[Term.RESERVED].Keys)
             {
+                if (!Offer.Products.ContainsKey(Sku))
+                {
+                    this._Context.LogError($"There is no product that matches the Sku {Sku}.");
+                    continue;
+                }
+
+                if (!Offer.Terms[Term.ON_DEMAND].ContainsKey(Sku))
+                {
+                    this._Context.LogError($"There is no on-demand pricing term for sku {Sku}.");
+                    continue;
+                }
+
                 try
                 {
-                    IEnumerable<ReservedInstancePricingTerm> Terms = ReservedInstancePricingTerm.Build(CommonSkus, Offer.Products[CommonSkus.Key]);
+                    IEnumerable<ReservedInstancePricingTerm> Terms = ReservedInstancePricingTerm.Build(
+                        Offer.Products[Sku], // The product
+                        Offer.Terms[Term.ON_DEMAND][Sku].FirstOrDefault().Value, // OnDemand PricingTerm
+                        Offer.Terms[Term.RESERVED][Sku].Select(x => x.Value) // IEnumerable<PricingTerm> Reserved Terms
+                    );
+
                     writer.WriteRecords<ReservedInstancePricingTerm>(Terms);
                 }
                 catch (Exception e)
