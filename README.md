@@ -55,6 +55,9 @@ files have been delivered.
 
 ## Revision History
 
+### 1.2.1
+Code cleanup.
+
 ### 1.2.0
 Updated how both csv and json files are processed and filtered.
 
