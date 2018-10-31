@@ -8,11 +8,12 @@
     <Company>bamcis.io</Company>
     <Copyright>BAMCIS</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <Version>1.2.1</Version>
+    <Version>1.2.2</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</RepositoryUrl>
     <PackageProjectUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</PackageProjectUrl>
     <PackageLicenseUrl>https://raw.githubusercontent.com/bamcis-io/AWSPriceListReservedInstanceHelper/master/LICENSE</PackageLicenseUrl>
+    <PackageReleaseNotes>Switched the flush order for the stream writers and added awaits.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

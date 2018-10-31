@@ -55,6 +55,9 @@ files have been delivered.
 
 ## Revision History
 
+### 1.2.2
+Switched the flush order for the stream writers and added awaits.
+
 ### 1.2.1
 Code cleanup.
 
