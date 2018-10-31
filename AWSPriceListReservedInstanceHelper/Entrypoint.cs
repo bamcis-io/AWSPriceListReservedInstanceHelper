@@ -197,9 +197,9 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 // Make sure everything is written out since we don't dispose
                 // of these till later, if the textwriter isn't flushed
                 // you will lose content from the csv file
-                SWriter.Flush();
                 Writer.Flush();
-
+                SWriter.Flush();
+               
                 using (TransferUtility XferUtil = new TransferUtility(_S3Client))
                 {
                     // Make the transfer utility request to post the price data csv content
@@ -260,7 +260,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <param name="productInfo">The product info data</param>
         /// <param name="writer">The csv writer to fill</param>
         /// <param name="format">The format of the product info data</param>
-        private void FillOutputStreamWriter(string productInfo, CsvWriter writer, Format format)
+        private async Task FillOutputStreamWriter(string productInfo, CsvWriter writer, Format format)
         {
             switch (format)
             {
@@ -268,13 +268,13 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 case Format.CSV:
                     {
                         // Fills the memory output stream
-                        this.GetFromCsv(productInfo, writer);
+                        await this.GetFromCsv(productInfo, writer);
                         break;
                     }
                 case Format.JSON:
                     {
                         // Fills the memory output stream
-                        this.GetFromJson(productInfo, writer);
+                        await this.GetFromJson(productInfo, writer);
                         break;
                     }
             }
