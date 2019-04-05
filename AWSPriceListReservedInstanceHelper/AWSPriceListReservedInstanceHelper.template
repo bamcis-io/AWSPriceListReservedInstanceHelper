@@ -92,7 +92,15 @@
 				2944,
 				3008
 			],
-			"Default" : "2560"
+			"Default" : "3008"
+		},
+		"WorkerTimeout" : {
+			"Type" : "Number",
+			"Description" : "The amount of time to give the worker to complete. The EC2 and RDS jobs take much longer than the others.",
+			"MinValue" : 60,
+			"MaxValue" : 900,
+			"Default" : 600,
+			"ConstraintDescription" : "The timeout must be between 60 (1 minute) and 900 (15 minutes)."
 		},
 
         "OrganizationTag"    : {
@@ -156,6 +164,16 @@
                 "TopicName"    : "AWSPriceListReservedInstanceHelper_Notifications"
             }
         },
+		"SQSDistributorDeadLetterQueue" : {
+			"Type" : "AWS::SQS::Queue",
+			"Properties" : {
+			}
+		},
+		"SQSWorkerDeadLetterQueue" : {
+			"Type" : "AWS::SQS::Queue",
+			"Properties" : {
+			}
+		},
 
 		"ResultsS3Bucket"   : {
             "Type" : "AWS::S3::Bucket",
@@ -420,7 +438,61 @@
                 ]
             }
         },
-
+		"LambdaSQSWorkerPolicy"     : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaSQSWorkerPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "sqs:SendMessage"
+                            ],
+                            "Resource" : [
+                                {
+                                    "Fn::GetAtt" : [ "SQSWorkerDeadLetterQueue", "Arn" ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRoleWorker"
+                    }
+                ]
+            }
+        },
+		"LambdaSQSDistributorPolicy"     : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaSQSDistributorPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "sqs:SendMessage"
+                            ],
+                            "Resource" : [
+                                {
+                                    "Fn::GetAtt" : [ "SQSDistributorDeadLetterQueue", "Arn" ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRoleDistributor"
+                    }
+                ]
+            }
+        },
+		
         "CloudWatchLogGroupWorker"  : {
             "Type" : "AWS::Logs::LogGroup",
             "Properties" : {
@@ -467,7 +539,9 @@
                 "MemorySize" : {
 					"Ref" : "WorkerMemory"
 				},
-                "Timeout"    : 120,
+                "Timeout"    : {
+					"Ref" : "WorkerTimeout"
+				},
                 "Role"       : {
                     "Fn::GetAtt" : [
                         "LambdaExecutionRoleWorker",
@@ -484,6 +558,12 @@
 						}
 					}
 				},
+				"DeadLetterQueue" : {
+					"Type" : "SQS",
+					"TargetArn" : {
+						"Fn::GetAtt" : [ "SQSWorkerDeadLetterQueue", "Arn" ]
+					}
+				},
                 "Tags"       : {
                     "Name" : "AWSPriceListReservedInstanceHelperWorker",
                     "Environment" : {
@@ -496,7 +576,10 @@
                         "Ref" : "OrganizationTag"
                     }
                 }
-            }
+            },
+			"DependsOn" : [
+				"LambdaSQSWorkerPolicy"
+			]
         },
 
 		"AWSPriceListReservedInstanceHelperDistributor" : {
@@ -525,34 +608,29 @@
 						}
 					}
 				},
+				"DeadLetterQueue" : {
+					"Type" : "SQS",
+					"TargetArn" : {
+						"Fn::GetAtt" : [ "SQSDistributorDeadLetterQueue", "Arn" ]
+					}
+				},
                 "Events"     : {
                     "Exec" : {
                         "Type" : "Schedule",
                         "Properties" : {
                             "Schedule" : {
-                                "Fn::Join" : [
-                                    "",
-                                    [
-                                        "rate(",
-                                        {
-                                            "Ref" : "Frequency"
-                                        },
-                                        " ",
-                                        {
-                                            "Ref" : "TimeUnit"
-                                        },
-                                        {
-                                            "Fn::If" : [
-                                                "AddS",
+								"Fn::Sub" : [
+									"rate(${Frequency} ${TimeUnit}${S})",
+									{
+										"S" : {
+											"Fn::If" : [
+												"AddS",
                                                 "s",
-                                                {
-                                                    "Ref" : "AWS::NoValue"
-                                                }
+                                                ""
                                             ]
-                                        },
-                                        ")"
-                                    ]
-                                ]
+										}
+									}	
+								]
                             }
                         }
                     }
@@ -569,8 +647,200 @@
                         "Ref" : "OrganizationTag"
                     }
                 }
-            }
-        }
+            },
+			"DependsOn" : [
+				"LambdaSQSDistributorPolicy"
+			]
+        },
+
+		"CloudWatchWorkerInvocationErrorAlarm" : {
+			"Type" : "AWS::CloudWatch::Alarm",
+			"Properties" : {
+				"ActionsEnabled" : "true",
+				"AlarmActions" : [
+					{
+						"Ref" : "SNSTopic"
+					}
+				],
+				"AlarmDescription" : "Alarm if Pricelist Reserved Instance Worker Has Failures Once in 60 Seconds",
+				"ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+				"Namespace" : "AWS/Lambda",
+				"MetricName" : "Errors",
+				"Dimensions" : [
+					{
+						"Name" : "FunctionName",
+						"Value" : {
+							"Ref" : "AWSPriceListReservedInstanceHelperWorker"
+						}
+					}
+				],
+				"Statistic" : "Sum",
+				"EvaluationPeriods" : "1",
+				"Threshold" : "1",
+				"Period" : "60",
+				"TreatMissingData" : "notBreaching",
+				"Unit" : "Count"
+			}
+		},
+		"CloudWatchDistributorInvocationErrorAlarm" : {
+			"Type" : "AWS::CloudWatch::Alarm",
+			"Properties" : {
+				"ActionsEnabled" : "true",
+				"AlarmActions" : [
+					{
+						"Ref" : "SNSTopic"
+					}
+				],
+				"AlarmDescription" : "Alarm if Pricelist Reserved Instance Distributor has failures once in 60 seconds",
+				"ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+				"Namespace" : "AWS/Lambda",
+				"MetricName" : "Errors",
+				"Dimensions" : [
+					{
+						"Name" : "FunctionName",
+						"Value" : {
+							"Ref" : "AWSPriceListReservedInstanceHelperDistributor"
+						}
+					}
+				],
+				"Statistic" : "Sum",
+				"EvaluationPeriods" : "1",
+				"Threshold" : "1",
+				"Period" : "60",
+				"TreatMissingData" : "notBreaching",
+				"Unit" : "Count"
+			}
+		},
+		"CloudWatchWorkerEnsureInvocationAlarm" : {
+			"Type" : "AWS::CloudWatch::Alarm",
+			"Properties" : {
+				"ActionsEnabled" : "true",
+				"AlarmActions" : [
+					{
+						"Ref" : "SNSTopic"
+					}
+				],
+				"AlarmDescription" : {
+					"Fn::Sub" : [
+						"Alarm if Pricelist Reserved Instance Worker does not execute at least five times a day (configured to run every ${Frequency} ${TimeUnit}${S})",
+						{
+							"S" : {
+								"Fn::If" : [
+									"AddS",
+									"s",
+                                    ""
+								]
+							}
+						}
+					]
+				},
+				"ComparisonOperator" : "LessThanThreshold",
+				"Namespace" : "AWS/Lambda",
+				"MetricName" : "Invocations",
+				"Dimensions" : [
+					{
+						"Name" : "FunctionName",
+						"Value" : {
+							"Ref" : "AWSPriceListReservedInstanceHelperWorker"
+						}
+					}
+				],
+				"Statistic" : "Sum",
+				"EvaluationPeriods" : "1",
+				"Threshold" : "5",
+				"Period" : "86400",
+				"Unit" : "Count"
+			}
+		},
+		"CloudWatchDistributorEnsureInvocationAlarm" : {
+			"Type" : "AWS::CloudWatch::Alarm",
+			"Properties" : {
+				"ActionsEnabled" : "true",
+				"AlarmActions" : [
+					{
+						"Ref" : "SNSTopic"
+					}
+				],
+				"AlarmDescription" : {
+					"Fn::Sub" : [
+						"Alarm if Pricelist Reserved Instance Distributor does not execute at least once a day (configured to run every ${Frequency} ${TimeUnit}${S})",
+						{
+							"S" : {
+								"Fn::If" : [
+									"AddS",
+									"s",
+                                    ""
+								]
+							}
+						}
+					]
+				},
+				"ComparisonOperator" : "LessThanThreshold",
+				"Namespace" : "AWS/Lambda",
+				"MetricName" : "Invocations",
+				"Dimensions" : [
+					{
+						"Name" : "FunctionName",
+						"Value" : {
+							"Ref" : "AWSPriceListReservedInstanceHelperWorker"
+						}
+					}
+				],
+				"Statistic" : "Sum",
+				"EvaluationPeriods" : "1",
+				"Threshold" : "1",
+				"Period" : "86400",
+				"Unit" : "Count"
+			}
+		},
+		"WorkerDeadLetterQueueDepthAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"AlarmDescription": "Alarm if Worker queue depth grows beyond 1 message in a 5 minute span.",
+				"Namespace": "AWS/SQS",
+				"MetricName": "ApproximateNumberOfMessagesVisible",
+				"Dimensions": [
+					{
+						"Name": "QueueName",
+						"Value" : { "Fn::GetAtt" : ["SQSWorkerDeadLetterQueue", "QueueName"] }
+					}
+				],
+				"Statistic": "Sum",
+				"Period": "300",
+				"EvaluationPeriods": "1",
+				"Threshold": "1",
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"AlarmActions": [
+					{
+						"Ref": "SNSTopic"
+					}
+				]
+			}
+		},
+		"DistributorDeadLetterQueueDepthAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"AlarmDescription": "Alarm if Distributor queue depth grows beyond 1 message in a 5 minute span",
+				"Namespace": "AWS/SQS",
+				"MetricName": "ApproximateNumberOfMessagesVisible",
+				"Dimensions": [
+					{
+						"Name": "QueueName",
+						"Value" : { "Fn::GetAtt" : ["SQSDistributorDeadLetterQueue", "QueueName"] }
+					}
+				],
+				"Statistic": "Sum",
+				"Period": "300",
+				"EvaluationPeriods": "1",
+				"Threshold": "1",
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"AlarmActions": [
+					{
+						"Ref": "SNSTopic"
+					}
+				]
+			}
+		}
 	},
 
     "Outputs"                  : {

@@ -192,7 +192,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 context.LogInfo("Parsing price list data.");
 
                 // Fill the output stream
-                this.FillOutputStreamWriter(Response.ProductInfo, Writer, ProductRequest.Format);
+                await this.FillOutputStreamWriter(Response.ProductInfo, Writer, ProductRequest.Format);
 
                 // Make sure everything is written out since we don't dispose
                 // of these till later, if the textwriter isn't flushed

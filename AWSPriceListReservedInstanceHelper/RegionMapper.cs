@@ -37,7 +37,8 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             { "EU", "eu-west-1" },
             { "EUC1", "eu-central-1" },
             { "EUW2", "eu-west-2" },
-            { "EUW3", "eu-west-3" }
+            { "EUW3", "eu-west-3" },
+            { "EUN1", "eu-north-1" }
         };
 
         /// <summary>

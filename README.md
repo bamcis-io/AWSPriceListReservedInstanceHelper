@@ -53,7 +53,12 @@ would normally end execution, an SNS notification can be sent to the specified t
 Logs. You could also pair these functions with a function that sent an SNS message on a `PutObject` S3 action to notify you that new RI pricing data
 files have been delivered.
 
+Additional monitoring has been added in version 1.3.0. CloudWatch Alarms now monitor failed Lambda function invocations and deliver SNS notifications when they occur. A separate CloudWatch Alarm monitors for at least 1 invocation of the Distributor function and 5 invocations of the Worker function to ensure the invocations are actually occuring. If you have the frequency scheduled for more than 1 day, expect to see SNS messages concerning the invocation frequency. Lastly, Lambda Dead Letter Queues (DLQ) have been added for each function (where the request to the function gets sent after 3 failed execution attempts). When the DLQ exceeds 0 messages, a CloudWatch Alarm is triggered and sends an SNS notification. It is up to the user to decide what to do with the messages in the DLQ.
+
 ## Revision History
+
+### 1.3.0
+Added enhanced monitoring.
 
 ### 1.2.2
 Switched the flush order for the stream writers and added awaits.
