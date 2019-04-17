@@ -423,7 +423,7 @@
                             ],
                             "Resource" : [
                                 {
-                                    "Fn::GetAtt" : [ "AWSPriceListReservedInstanceHelperWorker", "Arn"]
+                                    "Fn::GetAtt" : [ "AWSPriceListRIWorker", "Arn"]
                                 }
                             ]
                         }
@@ -495,7 +495,7 @@
             "Type" : "AWS::Logs::LogGroup",
             "Properties" : {
                 "LogGroupName" : {
-					"Fn::Sub" : "/aws/lambda/${AWSPriceListReservedInstanceHelperWorker}"
+					"Fn::Sub" : "/aws/lambda/${AWSPriceListRIWorker}"
 				},
                 "RetentionInDays" : {
                     "Fn::If" : [
@@ -514,7 +514,7 @@
             "Type" : "AWS::Logs::LogGroup",
             "Properties" : {
                 "LogGroupName" : {
-					"Fn::Sub" : "/aws/lambda/${AWSPriceListReservedInstanceHelperDistributor}"
+					"Fn::Sub" : "/aws/lambda/${AWSPriceListRIDistributor}"
 				},
                 "RetentionInDays" : {
                     "Fn::If" : [
@@ -530,7 +530,7 @@
             }
         },
 
-        "AWSPriceListReservedInstanceHelperWorker" : {
+        "AWSPriceListRIWorker" : {
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::RunForServiceAsync",
@@ -566,7 +566,7 @@
 					}
 				},
                 "Tags"       : {
-                    "Name" : "AWSPriceListReservedInstanceHelperWorker",
+                    "Name" : "AWSPriceListRIWorker",
                     "Environment" : {
                         "Ref" : "EnvironmentTag"
                     },
@@ -583,7 +583,7 @@
 			]
         },
 
-		"AWSPriceListReservedInstanceHelperDistributor" : {
+		"AWSPriceListRIDistributor" : {
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::LaunchWorkersAsync",
@@ -601,7 +601,7 @@
 				"Environment" : {
 				    "Variables" : {
 						"FunctionName" : {
-							"Ref" : "AWSPriceListReservedInstanceHelperWorker"
+							"Ref" : "AWSPriceListRIWorker"
 						},
 						"SNS" : {
 							"Ref" : "SNSTopic"
@@ -636,7 +636,7 @@
                     }
                 },
                 "Tags"       : {
-                    "Name" : "AWSPriceListReservedInstanceHelperDistributor",
+                    "Name" : "AWSPriceListRIDistributor",
                     "Environment" : {
                         "Ref" : "EnvironmentTag"
                     },
@@ -670,7 +670,7 @@
 					{
 						"Name" : "FunctionName",
 						"Value" : {
-							"Ref" : "AWSPriceListReservedInstanceHelperWorker"
+							"Ref" : "AWSPriceListRIWorker"
 						}
 					}
 				],
@@ -699,7 +699,7 @@
 					{
 						"Name" : "FunctionName",
 						"Value" : {
-							"Ref" : "AWSPriceListReservedInstanceHelperDistributor"
+							"Ref" : "AWSPriceListRIDistributor"
 						}
 					}
 				],
@@ -741,7 +741,7 @@
 					{
 						"Name" : "FunctionName",
 						"Value" : {
-							"Ref" : "AWSPriceListReservedInstanceHelperWorker"
+							"Ref" : "AWSPriceListRIWorker"
 						}
 					}
 				],
@@ -782,7 +782,7 @@
 					{
 						"Name" : "FunctionName",
 						"Value" : {
-							"Ref" : "AWSPriceListReservedInstanceHelperWorker"
+							"Ref" : "AWSPriceListRIWorker"
 						}
 					}
 				],
