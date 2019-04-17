@@ -204,10 +204,9 @@
             }
         },
 
-        "LambdaExecutionRoleWorker" : {
+        "LambdaPriceListWorkerRole" : {
             "Type" : "AWS::IAM::Role",
             "Properties" : {
-                "RoleName" : "LambdaPriceListWorkerRole",
                 "AssumeRolePolicyDocument" : {
                     "Version" : "2012-10-17",
                     "Statement" : [
@@ -226,10 +225,9 @@
                 }
             }
         },
-		"LambdaExecutionRoleDistributor" : {
+		"LambdaPriceListDistributorRole" : {
             "Type" : "AWS::IAM::Role",
             "Properties" : {
-                "RoleName" : "LambdaPriceListDistributorRole",
                 "AssumeRolePolicyDocument" : {
                     "Version" : "2012-10-17",
                     "Statement" : [
@@ -282,10 +280,10 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRoleWorker"
+                        "Ref" : "LambdaPriceListWorkerRole"
                     },
 					{
-                        "Ref" : "LambdaExecutionRoleDistributor"
+                        "Ref" : "LambdaPriceListDistributorRole"
                     }
                 ]
             }
@@ -310,10 +308,10 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRoleWorker"
+                        "Ref" : "LambdaPriceListWorkerRole"
                     },
 					{
-                        "Ref" : "LambdaExecutionRoleDistributor"
+                        "Ref" : "LambdaPriceListDistributorRole"
                     }
                 ]
             }
@@ -340,7 +338,7 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRoleWorker"
+                        "Ref" : "LambdaPriceListWorkerRole"
                     }
                 ]
             }
@@ -367,10 +365,10 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRoleWorker"
+                        "Ref" : "LambdaPriceListWorkerRole"
                     },
 					{
-                        "Ref" : "LambdaExecutionRoleDistributor"
+                        "Ref" : "LambdaPriceListDistributorRole"
                     }
                 ]
             }
@@ -406,7 +404,7 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRoleWorker"
+                        "Ref" : "LambdaPriceListWorkerRole"
                     }
                 ]
             }
@@ -433,7 +431,7 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRoleDistributor"
+                        "Ref" : "LambdaPriceListDistributorRole"
                     }
                 ]
             }
@@ -460,7 +458,7 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRoleWorker"
+                        "Ref" : "LambdaPriceListWorkerRole"
                     }
                 ]
             }
@@ -487,7 +485,7 @@
                 },
                 "Roles"          : [
                     {
-                        "Ref" : "LambdaExecutionRoleDistributor"
+                        "Ref" : "LambdaPriceListDistributorRole"
                     }
                 ]
             }
@@ -496,7 +494,9 @@
         "CloudWatchLogGroupWorker"  : {
             "Type" : "AWS::Logs::LogGroup",
             "Properties" : {
-                "LogGroupName" : "/aws/lambda/AWSPriceListReservedInstanceHelperWorker",
+                "LogGroupName" : {
+					"Fn::Sub" : "/aws/lambda/${AWSPriceListReservedInstanceHelperWorker}"
+				},
                 "RetentionInDays" : {
                     "Fn::If" : [
                         "InfiniteRetention",
@@ -513,7 +513,9 @@
 		"CloudWatchLogGroupDistributor"  : {
             "Type" : "AWS::Logs::LogGroup",
             "Properties" : {
-                "LogGroupName" : "/aws/lambda/AWSPriceListReservedInstanceHelperDistributor",
+                "LogGroupName" : {
+					"Fn::Sub" : "/aws/lambda/${AWSPriceListReservedInstanceHelperDistributor}"
+				},
                 "RetentionInDays" : {
                     "Fn::If" : [
                         "InfiniteRetention",
@@ -532,7 +534,6 @@
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::RunForServiceAsync",
-				"FunctionName" : "AWSPriceListReservedInstanceHelperWorker",
 				"Description": "Downloads the price list file for a specified service and formats it for ingestion by Athena.",
                 "Runtime" : "dotnetcore2.1",
                 "CodeUri" : "",
@@ -544,7 +545,7 @@
 				},
                 "Role"       : {
                     "Fn::GetAtt" : [
-                        "LambdaExecutionRoleWorker",
+                        "LambdaPriceListWorkerRole",
                         "Arn"
                     ]
                 },
@@ -586,7 +587,6 @@
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::LaunchWorkersAsync",
-				"FunctionName" : "AWSPriceListReservedInstanceHelperDistributor",
 				"Description": "Kicks of the AWS price list formatter worker functions.",
                 "Runtime" : "dotnetcore2.1",
                 "CodeUri" : "",
@@ -594,7 +594,7 @@
                 "Timeout"    : 30,
                 "Role"       : {
                     "Fn::GetAtt" : [
-                        "LambdaExecutionRoleDistributor",
+                        "LambdaPriceListDistributorRole",
                         "Arn"
                     ]
                 },
