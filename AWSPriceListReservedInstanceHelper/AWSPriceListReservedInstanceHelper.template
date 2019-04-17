@@ -92,7 +92,7 @@
 				2944,
 				3008
 			],
-			"Default" : "3008"
+			"Default" : 3008
 		},
 		"WorkerTimeout" : {
 			"Type" : "Number",

@@ -58,7 +58,7 @@ Additional monitoring has been added in version 1.3.0. CloudWatch Alarms now mon
 ## Revision History
 
 ### 2.0.0
-Added support for deployment through Codepipeline.
+Added support for deployment through Codepipeline. Updates.
 
 ### 1.3.0
 Added enhanced monitoring.
