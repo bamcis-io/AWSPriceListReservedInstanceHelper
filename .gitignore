@@ -3,6 +3,7 @@
 
 # AWS Lambda
 **/aws-lambda-tools-defaults.json
+**/pipeline-overrides.json
 
 # User-specific files
 *.suo

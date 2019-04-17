@@ -134,6 +134,36 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         }
 
         [Fact]
+        public async Task TestEntrypointJsonElasticsearch()
+        {
+            // ARRANGE
+
+            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
+            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
+            Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+
+            TestLambdaLogger TestLogger = new TestLambdaLogger();
+            TestClientContext ClientContext = new TestClientContext();
+
+            TestLambdaContext Context = new TestLambdaContext()
+            {
+                FunctionName = "PriceListApiFormatter",
+                FunctionVersion = "1",
+                Logger = TestLogger,
+                ClientContext = ClientContext
+            };
+
+            ServiceRequest SR = new ServiceRequest("AmazonES");
+
+            Entrypoint Ep = new Entrypoint();
+
+            // ACT
+            await Ep.RunForServiceAsync(SR, Context);
+
+            // ASSERT
+        }
+
+        [Fact]
         public async Task TestEntrypointCsvRedshift()
         {
             // ARRANGE
@@ -182,6 +212,35 @@ namespace AWSPriceListReservedInstanceHelper.Tests
             };
 
             ServiceRequest SR = new ServiceRequest("AmazonDynamoDB");
+
+            Entrypoint Ep = new Entrypoint();
+
+            // ACT
+            await Ep.RunForServiceAsync(SR, Context);
+
+            // ASSERT
+        }
+
+        [Fact]
+        public async Task TestEntrypointCsvElasticsearch()
+        {
+            // ARRANGE
+
+            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
+            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
+
+            TestLambdaLogger TestLogger = new TestLambdaLogger();
+            TestClientContext ClientContext = new TestClientContext();
+
+            TestLambdaContext Context = new TestLambdaContext()
+            {
+                FunctionName = "PriceListApiFormatter",
+                FunctionVersion = "1",
+                Logger = TestLogger,
+                ClientContext = ClientContext
+            };
+
+            ServiceRequest SR = new ServiceRequest("AmazonES");
 
             Entrypoint Ep = new Entrypoint();
 

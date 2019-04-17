@@ -320,7 +320,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                         try
                         {
                             writer.WriteRecords<ReservedInstancePricingTerm>(
-                                Rows.GroupBy(x => x.Sku).SelectMany(x => ReservedInstancePricingTerm.Build(x))
+                                Rows.GroupBy(x => x.Sku).SelectMany(x => ReservedInstancePricingTerm.BuildFromCsv(x))
                             );
                         }
                         catch (Exception e)

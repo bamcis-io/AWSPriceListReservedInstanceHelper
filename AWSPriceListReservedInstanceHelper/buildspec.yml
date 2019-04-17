@@ -1,0 +1,23 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - dotnet tool install -g Amazon.Lambda.Tools
+
+  pre_build:
+    commands:
+      - echo Restore started on `date`
+      - cd AWSPriceListReservedInstanceHelper
+      - dotnet clean
+      - dotnet restore
+      
+  build:
+    commands:
+      - echo Build started on `date`
+      - dotnet lambda package-ci --configuration Release --framework netcoreapp2.1 --s3-bucket $BUCKET --template AWSPriceListReservedInstanceHelper.template --output-template bin/Release/netcoreapp2.1/$PROJECT_NAME.template --output-package bin/Release/netcoreapp2.1/$PROJECT_NAME.zip
+
+artifacts:
+  name: BuildOutput
+  files:
+    - AWSPriceListReservedInstanceHelper/bin/Release/netcoreapp2.1/$PROJECT_NAME.template
+  discard-paths: yes  

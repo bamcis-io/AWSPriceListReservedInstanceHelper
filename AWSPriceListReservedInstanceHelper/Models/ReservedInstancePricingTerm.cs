@@ -268,12 +268,27 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 
         #region Public Methods
 
-        public static IEnumerable<ReservedInstancePricingTerm> Build2(IGrouping<string, PricingTerm> commonSkus, Product product)
+        /// <summary>
+        /// Creates a consolidated pricing term from a regularly formatted pricing term
+        /// that comes directly from the price list api. Used when you've grouped the price list by
+        /// SKU which gives pricing terms for all on demand and reserved terms in the group. This
+        /// will identify the on demand term and then construct the reserved terms.
+        /// </summary>
+        /// <param name="commonSkus"></param>
+        /// <param name="product"></param>
+        /// <returns></returns>
+        public static IEnumerable<ReservedInstancePricingTerm> Build(IGrouping<string, PricingTerm> commonSkus, Product product)
         {
             PricingTerm OnDemand = commonSkus.FirstOrDefault(x => x.TermAttributes.PurchaseOption == PurchaseOption.ON_DEMAND);
+
+            if (OnDemand == null)
+            {
+                throw new KeyNotFoundException($"An on demand price data term was not found for sku: {commonSkus.Key}.");
+            }
+
             IEnumerable<PricingTerm> ReservedTerms = commonSkus.Where(x => x.TermAttributes.PurchaseOption != PurchaseOption.ON_DEMAND);
 
-            if (!ReservedTerms.Any() || OnDemand == null)
+            if (!ReservedTerms.Any())
             {
                 return Enumerable.Empty<ReservedInstancePricingTerm>();
             }
@@ -282,179 +297,11 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         }
 
         /// <summary>
-        /// Creates a consolidated pricing term from a regularly formatted pricing term
-        /// that comes directly from the price list api
-        /// </summary>
-        /// <param name="term"></param>
-        /// <returns></returns>
-        public static IEnumerable<ReservedInstancePricingTerm> Build(IGrouping<string, PricingTerm> commonSkus, Product product)
-        {
-            if (commonSkus != null)
-            {
-                string Platform = GetPlatform(product);
-                string Region = RegionMapper.GetRegionFromUsageType(product.Attributes.GetValueOrDefault("usagetype"));
-
-                // Only EC2 has tenancy
-                if (!product.Attributes.TryGetValue("tenancy", out string Tenancy))
-                {
-                    Tenancy = "Shared";
-                }
-
-                PricingTerm OnDemand = commonSkus.FirstOrDefault(x => x.TermAttributes.PurchaseOption == PurchaseOption.ON_DEMAND);
-                double OnDemandCost = -1;
-
-                if (OnDemand == null)
-                {
-                    throw new KeyNotFoundException($"An on demand price data term was not found for sku: {commonSkus.Key}.");
-                }
-                else
-                {
-                    // Get the on demand hourly cost
-                    // DynamoDB has free tier price dimensions in the same on demand object, so make 
-                    // sure we pick the first that does not have free tier in the description
-                    KeyValuePair<string, PriceDimension> Dimension = OnDemand.PriceDimensions.FirstOrDefault(x => !x.Value.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
-
-                    if (Dimension.Value == null)
-                    {
-                        OnDemandCost = 0;
-                    }
-                    else if (!Double.TryParse(Dimension.Value.PricePerUnit.First().Value, out OnDemandCost))
-                    {
-                        throw new FormatException($"Could not parse the on demand price {Dimension.Value.PricePerUnit.First().Value} for sku: {commonSkus.Key}.");
-                    }
-                }
-
-                // Each pricing term will have the price dimensions for the upfront and recurring costs
-                foreach (PricingTerm Term in commonSkus.Where(x => x.TermAttributes.PurchaseOption != PurchaseOption.ON_DEMAND))
-                {
-                    PriceDimension Upfront = Term.PriceDimensions.Select(x => x.Value).FirstOrDefault(x =>
-                    {
-                        if (!String.IsNullOrEmpty(x.Description))
-                        {
-                            return x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase);
-                        }
-                        else
-                        {
-                            return false;
-                        }
-                    });
-
-                    PriceDimension Recurring = Term.PriceDimensions.Select(x => x.Value).FirstOrDefault(x =>
-                    {
-                        if (!String.IsNullOrEmpty(x.Description))
-                        {
-                            return !x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase);
-                        }
-                        else
-                        {
-                            return false;
-                        }
-                    });
-
-                    double HourlyRecurring = 0;
-
-                    // Only check for recurring, since some may have no upfront
-                    if (Recurring == null)
-                    {
-                        // This should never happen
-                        throw new KeyNotFoundException($"The pricing term in {product.Attributes.GetValueOrDefault("servicecode")} for sku {Term.Sku} and offer term code {Term.OfferTermCode} did not contain a price dimension for hourly usage charges.");
-                    }
-                    else
-                    {
-                        // Parse out the rate
-                        if (!Double.TryParse(Recurring.PricePerUnit.First().Value, out HourlyRecurring))
-                        {
-                            throw new FormatException($"Could not parse the recurring price per unit of {Recurring.PricePerUnit.First().Value} for sku {Term.Sku}, offer term code {Term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
-                        }
-                    }
-
-                    double UpfrontFee = 0;
-
-                    if (Upfront != null)
-                    {
-                        // Parse out upfront fee
-                        if (!Double.TryParse(Upfront.PricePerUnit.First().Value, out UpfrontFee))
-                        {
-                            throw new FormatException($"Could not parse the upfront cost of {Upfront.PricePerUnit.First().Value} for sku {Term.Sku}, offer term code {Term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
-                        }
-                    }
-
-                    string OperatingSystem = String.Empty;
-
-                    if (product.Attributes.ContainsKey("operatingsystem"))
-                    {
-                        OperatingSystem = product.Attributes.GetValueOrDefault("operatingsystem");
-                    }
-                    else
-                    {
-                        OperatingSystem = Platform;
-                    }
-
-                    int vCPU = 0;
-
-                    if (product.Attributes.ContainsKey("vcpu"))
-                    {
-                        Int32.TryParse(product.Attributes.GetValueOrDefault("vcpu"), out vCPU);
-                    }
-
-                    double Memory = 0;
-
-                    if (product.Attributes.ContainsKey("memory"))
-                    {
-                        string MemoryString = product.Attributes.GetValueOrDefault("memory").Replace(",", "");
-
-                        Match MemoryMatch = _MemoryRegex.Match(MemoryString);
-
-                        if (MemoryMatch.Success)
-                        {
-                            Double.TryParse(MemoryMatch.Groups[1].Value, out Memory);
-                        }
-                    }
-
-                    string UsageType = product.Attributes.GetValueOrDefault("usagetype");
-
-                    string InstanceType = UsageType;
-
-                    if (product.Attributes.ContainsKey("instancetype"))
-                    {
-                        InstanceType = product.Attributes.GetValueOrDefault("usagetype");
-                    }
-
-                    yield return new ReservedInstancePricingTerm(
-                        Term.Sku,
-                        Term.OfferTermCode,
-                        product.Attributes.GetValueOrDefault("servicecode"),
-                        Platform,
-                        OperatingSystem,
-                        InstanceType,
-                        product.Attributes.GetValueOrDefault("operation"),
-                        UsageType,
-                        Tenancy,
-                        Region,
-                        vCPU,
-                        Memory,
-                        OnDemandCost,
-                        HourlyRecurring,
-                        UpfrontFee,
-                        Term.TermAttributes.LeaseContractLength,
-                        Term.TermAttributes.PurchaseOption,
-                        Term.TermAttributes.OfferingClass,
-                        AWSPriceListApi.Serde.Term.RESERVED
-                    );
-                }
-            }
-            else
-            {
-                throw new ArgumentNullException("commonSkus");
-            }
-        }
-
-        /// <summary>
         /// Creates a consolidated pricing term from price list csv rows that share a common sku
         /// </summary>
         /// <param name="commonSkus"></param>
         /// <returns></returns>
-        public static IEnumerable<ReservedInstancePricingTerm> Build(IGrouping<string, CsvRowItem> commonSkus)
+        public static IEnumerable<ReservedInstancePricingTerm> BuildFromCsv(IGrouping<string, CsvRowItem> commonSkus)
         {
             if (commonSkus != null)
             {
@@ -534,7 +381,8 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 
         /// <summary>
         /// Creates a consolidated pricing term from a regularly formatted pricing term
-        /// that comes directly from the price list API
+        /// that comes directly from the price list API. Used when you've already identified the on
+        /// demand pricing term and have separated out just the reserved pricing terms.
         /// </summary>
         /// <param name="product"></param>
         /// <param name="ondemand"></param>
@@ -833,16 +681,26 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                             break;
                         }
                     case "amazonelasticache":
+                        {                            
+                            Buffer.Append("ElastiCache");
+
+                            if (Attributes.TryGetValue("cacheengine", out string CacheEngine) && !String.IsNullOrEmpty(CacheEngine))
+                            {
+                                Buffer.Append(" ").Append(CacheEngine);
+                            }
+
+                            break;
+                        }
+                    case "amazones":
                         {
-                            Attributes.TryGetValue("cacheengine", out string CacheEngine);
-                            Buffer.Append("ElastiCache ").Append(CacheEngine);
+                            Buffer.Append("Amazon Elasticsearch");
                             break;
                         }
                     case "amazondynamodb":
                         {
-                            Attributes.TryGetValue("group", out string Group);
-
-                            if (!String.IsNullOrEmpty(Group))
+                           
+                            if (Attributes.TryGetValue("group", out string Group) &&
+                             !String.IsNullOrEmpty(Group))
                             {
                                 Buffer.Append(Group);
                             }
@@ -855,9 +713,8 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                         }
                     case "amazonredshift":
                         {
-                            Attributes.TryGetValue("usageFamily", out string UsageFamily);
-
-                            if (!String.IsNullOrEmpty(UsageFamily))
+                            if (Attributes.TryGetValue("usageFamily", out string UsageFamily) && 
+                                !String.IsNullOrEmpty(UsageFamily))
                             {
                                 Buffer.Append(UsageFamily);
                             }
