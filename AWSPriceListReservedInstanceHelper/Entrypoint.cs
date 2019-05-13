@@ -31,16 +31,16 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
     {
         #region Private Fields
 
-        private static ILambdaContext _Context;
-        private static PriceListClient _PriceListClient;
-        private static IAmazonS3 _S3Client;
-        private static AmazonLambdaClient _LambdaClient;
-        private static IAmazonSimpleNotificationService _SNSClient;
-        private static string _SNSTopic;
-        private static string _Subject = "AWS RI Price List Helper Error";
+        private static ILambdaContext _context;
+        private static PriceListClient priceListClient;
+        private static IAmazonS3 s3Client;
+        private static AmazonLambdaClient lambdaClient;
+        private static IAmazonSimpleNotificationService snsClient;
+        private static string snsTopic;
+        private static string subject = "AWS RI Price List Helper Error";
 
         // Use the pipe so that commas in strings don't cause an issue
-        private static readonly string _DefaultDelimiter = "|";
+        private static readonly string defaultDelimiter = "|";
 
         #endregion
 
@@ -48,11 +48,11 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 
         static Entrypoint()
         {
-            _SNSClient = new AmazonSimpleNotificationServiceClient();
-            _PriceListClient = new PriceListClient();
-            _S3Client = new AmazonS3Client();
-            _LambdaClient = new AmazonLambdaClient();
-            _SNSTopic = System.Environment.GetEnvironmentVariable("SNS");
+            snsClient = new AmazonSimpleNotificationServiceClient();
+            priceListClient = new PriceListClient();
+            s3Client = new AmazonS3Client();
+            lambdaClient = new AmazonLambdaClient();
+            snsTopic = System.Environment.GetEnvironmentVariable("SNS");
         }
 
         /// <summary>
@@ -74,40 +74,30 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <returns></returns>
         public async Task LaunchWorkersAsync(CloudWatchScheduledEvent ev, ILambdaContext context)
         {
-            _Context = context;
-            List<Task<InvokeResponse>> Responses = new List<Task<InvokeResponse>>();
+            _context = context;
+            List<Task<InvokeResponse>> response = new List<Task<InvokeResponse>>();
 
-            foreach (string Service in Constants.ReservableServices)
+            foreach (string service in Constants.ReservableServices)
             {
                 try
                 {
                     InvokeRequest Req = new InvokeRequest()
                     {
                         FunctionName = System.Environment.GetEnvironmentVariable("FunctionName"),
-                        Payload = $"{{\"service\":\"{Service}\"}}",
+                        Payload = $"{{\"service\":\"{service}\"}}",
                         InvocationType = InvocationType.Event,
                         ClientContext = JsonConvert.SerializeObject(context.ClientContext, Formatting.None),
                     };
 
-                    InvokeResponse Res = await _LambdaClient.InvokeAsync(Req);
-                    context.LogInfo($"Completed kickoff for {Service} with http status {(int)Res.StatusCode}.");
+                    InvokeResponse lambdaResponse = await lambdaClient.InvokeAsync(Req);
+                    context.LogInfo($"Completed kickoff for {service} with http status {(int)lambdaResponse.StatusCode}.");
                 }
                 catch (Exception e)
                 {
                     context.LogError(e);
-                    string SnsTopic = System.Environment.GetEnvironmentVariable("SNS");
-                    if (!String.IsNullOrEmpty(SnsTopic))
-                    {
-                        try
-                        {
-                            string Message = $"[ERROR] {DateTime.Now} {{{context.AwsRequestId}}} : There was a problem creating a lambda invocation request for service {Service} - {e.Message}";
-                            await _SNSClient.PublishAsync(SnsTopic, Message, "[ERROR] AWS Price List Reserved Instance Helper");
-                        }
-                        catch (Exception e2)
-                        {
-                            context.LogError("Failed to send SNS message on exception", e2);
-                        }
-                    }
+                    string message = $"[ERROR] {DateTime.Now} {{{context.AwsRequestId}}} : There was a problem creating a lambda invocation request for service {service} - {e.Message}";
+                    await SNSNotify(message, context);
+                    throw e;
                 }
             }
 
@@ -123,100 +113,100 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <returns></returns>
         public async Task RunForServiceAsync(ServiceRequest req, ILambdaContext context)
         {
-            _Context = context;
+            _context = context;
 
             if (req == null || String.IsNullOrEmpty(req.Service))
             {
-                string Message = "No service was provided in the service request.";
-                context.LogError(Message);
-                await SNSNotify(Message, context);
+                string message = "No service was provided in the service request.";
+                context.LogError(message);
+                await SNSNotify(message, context);
                 return;
             }
 
             // Get the product price data for the service
             context.LogInfo($"Getting product data for {req.Service}");
 
-            string Bucket = System.Environment.GetEnvironmentVariable("BUCKET");
-            string Delimiter = System.Environment.GetEnvironmentVariable("DELIMITER");
-            string InputFormat = System.Environment.GetEnvironmentVariable("PRICELIST_FORMAT");
+            string bucket = System.Environment.GetEnvironmentVariable("BUCKET");
+            string delimiter = System.Environment.GetEnvironmentVariable("DELIMITER");
+            string inputFormat = System.Environment.GetEnvironmentVariable("PRICELIST_FORMAT");
 
-            if (String.IsNullOrEmpty(InputFormat))
+            if (String.IsNullOrEmpty(inputFormat))
             {
-                InputFormat = "csv";
+                inputFormat = "csv";
             }
 
-            InputFormat = InputFormat.ToLower().Trim();
+            inputFormat = inputFormat.ToLower().Trim();
 
-            context.LogInfo($"Using price list format: {InputFormat}");
+            context.LogInfo($"Using price list format: {inputFormat}");
 
-            if (String.IsNullOrEmpty(Delimiter))
+            if (String.IsNullOrEmpty(delimiter))
             {
-                Delimiter = _DefaultDelimiter;
+                delimiter = defaultDelimiter;
             }
 
             // This holds the disposable stream and writer objects
             // that need to be disposed at the end
-            List<IDisposable> Disposables = new List<IDisposable>();
+            List<IDisposable> disposables = new List<IDisposable>();
 
             try
             {
                 // Will hold the stream of price data content that the 
                 // transfer utility will send
-                MemoryStream MStreamOut = new MemoryStream();
-                Disposables.Add(MStreamOut);
+                MemoryStream memoryStreamOut = new MemoryStream();
+                disposables.Add(memoryStreamOut);
 
                 // Provided to the csv writer to write to the memory stream
-                TextWriter SWriter = new StreamWriter(MStreamOut);
-                Disposables.Add(SWriter);
+                TextWriter streamWriter = new StreamWriter(memoryStreamOut);
+                disposables.Add(streamWriter);
 
                 // The csv writer to write the price data objects
-                CsvWriter Writer = new CsvWriter(SWriter);
-                Writer.Configuration.Delimiter = Delimiter;
-                Disposables.Add(Writer);
+                CsvWriter csvWriter = new CsvWriter(streamWriter);
+                csvWriter.Configuration.Delimiter = delimiter;
+                disposables.Add(csvWriter);
 
                 // Write the header to the csv
-                Writer.WriteHeader<ReservedInstancePricingTerm>();
-                Writer.NextRecord();
+                csvWriter.WriteHeader<ReservedInstancePricingTerm>();
+                csvWriter.NextRecord();
 
                 // Create the product request with the right format
-                GetProductRequest ProductRequest = new GetProductRequest(req.Service)
+                GetProductRequest productRequest = new GetProductRequest(req.Service)
                 {
-                    Format = InputFormat.Equals("json", StringComparison.OrdinalIgnoreCase) ? Format.JSON : Format.CSV
+                    Format = inputFormat.Equals("json", StringComparison.OrdinalIgnoreCase) ? Format.JSON : Format.CSV
                 };
 
                 context.LogInfo("Getting price list offer file.");
 
                 // Retrieve the finished get product price data response
-                GetProductResponse Response = await _PriceListClient.GetProductAsync(ProductRequest);
+                GetProductResponse response = await priceListClient.GetProductAsync(productRequest);
 
                 context.LogInfo("Parsing price list data.");
 
                 // Fill the output stream
-                await this.FillOutputStreamWriter(Response.ProductInfo, Writer, ProductRequest.Format);
+                await this.FillOutputStreamWriter(response.ProductInfo, csvWriter, productRequest.Format);
 
                 // Make sure everything is written out since we don't dispose
                 // of these till later, if the textwriter isn't flushed
                 // you will lose content from the csv file
-                Writer.Flush();
-                SWriter.Flush();
+                csvWriter.Flush();
+                streamWriter.Flush();
                
-                using (TransferUtility XferUtil = new TransferUtility(_S3Client))
+                using (TransferUtility xferUtility = new TransferUtility(s3Client))
                 {
                     // Make the transfer utility request to post the price data csv content
-                    TransferUtilityUploadRequest Request = new TransferUtilityUploadRequest()
+                    TransferUtilityUploadRequest request = new TransferUtilityUploadRequest()
                     {
-                        BucketName = Bucket,
-                        Key = $"{Response.ServiceCode}.csv",
-                        InputStream = MStreamOut,
+                        BucketName = bucket,
+                        Key = $"{response.ServiceCode}.csv",
+                        InputStream = memoryStreamOut,
                         AutoResetStreamPosition = true,
                         AutoCloseStream = true
                     };
 
-                    context.LogInfo($"Starting upload for:        {Response.ServiceCode}");
-                    context.LogInfo($"Output stream length:       {MStreamOut.Length}");
+                    context.LogInfo($"Starting upload for:        {response.ServiceCode}");
+                    context.LogInfo($"Output stream length:       {memoryStreamOut.Length}");
 
                     // Make the upload and record the task so we can wait for it finish
-                    await XferUtil.UploadAsync(Request);
+                    await xferUtility.UploadAsync(request);
                 }
 
                 context.LogInfo("Completed upload");
@@ -224,9 +214,9 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             catch (Exception e)
             {
                 context.LogError(e);
-                string Message = $"[ERROR] {DateTime.Now} {{{context.AwsRequestId}}} : There was a problem executing lambda for service {req.Service} - {e.Message}\n{e.StackTrace}";
-
-                await SNSNotify(Message, context);
+                string message = $"[ERROR] {DateTime.Now} {{{context.AwsRequestId}}} : There was a problem executing lambda for service {req.Service} - {e.Message}\n{e.StackTrace}";
+                await SNSNotify(message, context);
+                throw e;
             }
             finally
             {
@@ -235,11 +225,11 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 // so the memory stream doesn't get closed by disposing
                 // of the writers too early, which will cause the transfer utility
                 // to fail the upload
-                foreach (IDisposable Item in Disposables)
+                foreach (IDisposable item in disposables)
                 {
                     try
                     {
-                        Item.Dispose();
+                        item.Dispose();
                     }
                     catch { }
                 }
@@ -289,44 +279,64 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         {
             // Find the the beginning of the header line
             // and remove the version data, etc from the csv
-            int Index = csv.IndexOf("\"SKU\",");
+            int index = csv.IndexOf("\"SKU\",");
 
-            using (MemoryStream MStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(csv, Index, csv.Length - Index)))
+            using (MemoryStream mstream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(csv, index, csv.Length - index)))
             {
-                using (StreamReader SReader = new StreamReader(MStream))
+                using (StreamReader streamReader = new StreamReader(mstream))
                 {
-                    using (CsvReader Reader = new CsvReader(SReader))
+                    using (CsvReader reader = new CsvReader(streamReader))
                     {
                         // Make all of the headers lowercase so we don't have to worry about
                         // case sensitivity later
-                        Reader.Configuration.PrepareHeaderForMatch = Header => Header.ToLower();
+                        reader.Configuration.PrepareHeaderForMatch = Header => Header.ToLower();
 
-                        Reader.Read(); // Advance to the next row, which is the header row
-                        Reader.ReadHeader(); // Read the headers
+                        reader.Read(); // Advance to the next row, which is the header row
+                        reader.ReadHeader(); // Read the headers
 
-                        List<CsvRowItem> Rows = new List<CsvRowItem>();
+                        List<CsvRowItem> rows = new List<CsvRowItem>();
 
-                        while (Reader.Read()) // Read all lines in the CSV
+                        while (reader.Read()) // Read all lines in the CSV
                         {
                             // Will return null if it's a record we're not concerned about
-                            CsvRowItem Row = CsvRowItem.Build(Reader);
+                            CsvRowItem row = CsvRowItem.Build(reader);
 
-                            if (Row != null)
+                            if (row != null)
                             {
-                                Rows.Add(Row);
+                                rows.Add(row);
                             }
                         } // Close while loop
 
                         try
                         {
-                            writer.WriteRecords<ReservedInstancePricingTerm>(
-                                Rows.GroupBy(x => x.Sku).SelectMany(x => ReservedInstancePricingTerm.BuildFromCsv(x))
-                            );
+                            List<ReservedInstancePricingTerm> terms = new List<ReservedInstancePricingTerm>();
+
+                            foreach (IGrouping<string, CsvRowItem> item in rows.GroupBy(x => x.Sku))
+                            {
+                                try
+                                {
+                                    // Force the list to be enumerated to throw exceptions here
+                                    // and catch them, for example if we can't find an on demand
+                                    // pricing term in this set
+                                    List<ReservedInstancePricingTerm> row = ReservedInstancePricingTerm.BuildFromCsv(item).ToList();
+                                    terms.AddRange(row);
+                                }
+                                catch (Exception e)
+                                {
+                                    _context.LogError(e);
+                                    await SNSNotify(e, _context);
+                                    // Don't throw, at least populate with data that has all
+                                    // required info
+                                }
+                            }
+
+                            writer.WriteRecords<ReservedInstancePricingTerm>(terms);
                         }
                         catch (Exception e)
                         {
-                            _Context.LogError(e);
-                            await SNSNotify(e, _Context);
+                            _context.LogError(e);
+                            await SNSNotify(e, _context);
+                            throw e;
                         }
                         
                     } // Close CsvReader
@@ -341,7 +351,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <param name="writer"></param>
         private async Task GetFromJson(string json, CsvWriter writer)
         {
-            ProductOffer Offer = ProductOffer.FromJson(json);
+            ProductOffer offer = ProductOffer.FromJson(json);
 
             /*  
              *  Old implementation, don't need such a complex grouping, just iterate
@@ -369,34 +379,35 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
              *   }
              */
 
-            foreach (string Sku in Offer.Terms[Term.RESERVED].Keys)
+            foreach (string Sku in offer.Terms[Term.RESERVED].Keys)
             {
-                if (!Offer.Products.ContainsKey(Sku))
+                if (!offer.Products.ContainsKey(Sku))
                 {
-                    _Context.LogWarning($"There is no product that matches the Sku {Sku}.");
+                    _context.LogWarning($"There is no product that matches the Sku {Sku}.");
                     continue;
                 }
 
-                if (!Offer.Terms[Term.ON_DEMAND].ContainsKey(Sku))
+                if (!offer.Terms[Term.ON_DEMAND].ContainsKey(Sku))
                 {
-                    _Context.LogWarning($"There is no on-demand pricing term for sku {Sku}.");
+                    _context.LogWarning($"There is no on-demand pricing term for sku {Sku}.");
                     continue;
                 }
 
                 try
                 {
-                    IEnumerable<ReservedInstancePricingTerm> Terms = ReservedInstancePricingTerm.Build(
-                        Offer.Products[Sku], // The product
-                        Offer.Terms[Term.ON_DEMAND][Sku].FirstOrDefault().Value, // OnDemand PricingTerm
-                        Offer.Terms[Term.RESERVED][Sku].Select(x => x.Value) // IEnumerable<PricingTerm> Reserved Terms
+                    IEnumerable<ReservedInstancePricingTerm> terms = ReservedInstancePricingTerm.Build(
+                        offer.Products[Sku], // The product
+                        offer.Terms[Term.ON_DEMAND][Sku].FirstOrDefault().Value, // OnDemand PricingTerm
+                        offer.Terms[Term.RESERVED][Sku].Select(x => x.Value) // IEnumerable<PricingTerm> Reserved Terms
                     );
 
-                    writer.WriteRecords<ReservedInstancePricingTerm>(Terms);
+                    writer.WriteRecords<ReservedInstancePricingTerm>(terms);
                 }
                 catch (Exception e)
                 {
-                    _Context.LogError(e);
-                    await SNSNotify(e, _Context);
+                    _context.LogError(e);
+                    await SNSNotify(e, _context);
+                    throw e;
                 }
             }
         }
@@ -409,20 +420,21 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <returns></returns>
         private static async Task SNSNotify(string message, ILambdaContext context)
         {
-            if (!String.IsNullOrEmpty(_SNSTopic))
+            if (!String.IsNullOrEmpty(snsTopic))
             {
                 try
                 {
-                    PublishResponse Response = await _SNSClient.PublishAsync(_SNSTopic, message, _Subject);
+                    PublishResponse response = await snsClient.PublishAsync(snsTopic, message, subject);
 
-                    if (Response.HttpStatusCode != HttpStatusCode.OK)
+                    if (response.HttpStatusCode != HttpStatusCode.OK)
                     {
-                        context.LogError($"Failed to send SNS notification with status code {(int)Response.HttpStatusCode}.");
+                        context.LogError($"Failed to send SNS notification with status code {(int)response.HttpStatusCode}.");
                     }
                 }
                 catch (Exception e)
                 {
                     context.LogError("Failed to send SNS notification.", e);
+                    throw e;
                 }
             }
         }

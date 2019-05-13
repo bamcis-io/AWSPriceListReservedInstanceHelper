@@ -57,6 +57,9 @@ Additional monitoring has been added in version 1.3.0. CloudWatch Alarms now mon
 
 ## Revision History
 
+### 2.1.0
+Removed the frequency parameters and replaced the scheduled event trigger with SNS notification triggers that AWS provides when the price list is updated. Fixed error handling when building reserved instance pricing terms.
+
 ### 2.0.0
 Added support for deployment through Codepipeline.
 

@@ -310,65 +310,65 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                 // Amazon DynamoDB - HBHVWY47CM => Free tier
                 // EC2, Redshift, RDS, ElastiCache do not include free tier charge dimensions in price
                 // list file as of 9/25/2018
-                CsvRowItem OnDemand = commonSkus.FirstOrDefault(x => x.PurchaseOption == PurchaseOption.ON_DEMAND && !x.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
-                double OnDemandCost = -1;
+                CsvRowItem onDemandRow = commonSkus.FirstOrDefault(x => x.PurchaseOption == PurchaseOption.ON_DEMAND && !x.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
+                double onDemandCost = -1;
 
-                if (OnDemand == null)
+                if (onDemandRow == null)
                 {
                     throw new KeyNotFoundException($"An on demand price data term was not found for sku: {commonSkus.Key}.");
                 }
                 else
                 {
-                    OnDemandCost = OnDemand.PricePerUnit;
+                    onDemandCost = onDemandRow.PricePerUnit;
                 }
 
-                foreach (IGrouping<string, CsvRowItem> Group in commonSkus.Where(x => x.PurchaseOption != PurchaseOption.ON_DEMAND).GroupBy(x => x.Key))
+                foreach (IGrouping<string, CsvRowItem> group in commonSkus.Where(x => x.PurchaseOption != PurchaseOption.ON_DEMAND).GroupBy(x => x.Key))
                 {
-                    CsvRowItem Upfront = Group.FirstOrDefault(x => x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
+                    CsvRowItem upfront = group.FirstOrDefault(x => x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
 
-                    CsvRowItem Recurring = Group.FirstOrDefault(x => !x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
+                    CsvRowItem recurring = group.FirstOrDefault(x => !x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
 
-                    double HourlyRecurring = 0;
+                    double hourlyRecurring = 0;
 
                     // Only check for recurring, since some may have no upfront
-                    if (Recurring == null)
+                    if (recurring == null)
                     {
                         // This should never happen
-                        throw new KeyNotFoundException($"The pricing term in {Group.First().ServiceCode} for sku {Group.First().Sku} and offer term code {Group.First().OfferTermCode} did not contain a price dimension for hourly usage charges.");
+                        throw new KeyNotFoundException($"The pricing term in {group.First().ServiceCode} for sku {group.First().Sku} and offer term code {group.First().OfferTermCode} did not contain a price dimension for hourly usage charges.");
                     }
                     else
                     {
-                        HourlyRecurring = Recurring.PricePerUnit;
+                        hourlyRecurring = recurring.PricePerUnit;
                     }
 
-                    double UpfrontFee = 0;
+                    double upfrontFee = 0;
 
-                    if (Upfront != null)
+                    if (upfront != null)
                     {
-                        UpfrontFee = Upfront.PricePerUnit;
+                        upfrontFee = upfront.PricePerUnit;
                     }
 
-                    string OperatingSystem = Group.First().OperatingSystem;
+                    CsvRowItem first = group.First();
 
                     yield return new ReservedInstancePricingTerm(
-                        Group.First().Sku,
-                        Group.First().OfferTermCode,
-                        Group.First().ServiceCode,
-                        Group.First().Platform,
-                        OperatingSystem,
-                        Group.First().InstanceType,
-                        Group.First().Operation,
-                        Group.First().UsageType,
-                        Group.First().Tenancy,
-                        Group.First().Region,
-                        Group.First().vCPU,
-                        Group.First().Memory,
-                        OnDemandCost,
-                        HourlyRecurring,
-                        UpfrontFee,
-                        Group.First().LeaseContractLength,
-                        Group.First().PurchaseOption,
-                        Group.First().OfferingClass,
+                        first.Sku,
+                        first.OfferTermCode,
+                        first.ServiceCode,
+                        first.Platform,
+                        first.OperatingSystem,
+                        first.InstanceType,
+                        first.Operation,
+                        first.UsageType,
+                        first.Tenancy,
+                        first.Region,
+                        first.vCPU,
+                        first.Memory,
+                        onDemandCost,
+                        hourlyRecurring,
+                        upfrontFee,
+                        first.LeaseContractLength,
+                        first.PurchaseOption,
+                        first.OfferingClass,
                         Term.RESERVED
                     );
                 }

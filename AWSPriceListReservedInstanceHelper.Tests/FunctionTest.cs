@@ -193,6 +193,35 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         }
 
         [Fact]
+        public async Task TestEntrypointCsvRDS()
+        {
+            // ARRANGE
+
+            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
+            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
+
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
+
+            TestLambdaContext Context = new TestLambdaContext()
+            {
+                FunctionName = "PriceListApiFormatter",
+                FunctionVersion = "1",
+                Logger = testLogger,
+                ClientContext = clientContext
+            };
+
+            ServiceRequest request = new ServiceRequest("AmazonRDS");
+
+            Entrypoint entrypoint = new Entrypoint();
+
+            // ACT
+            await entrypoint.RunForServiceAsync(request, Context);
+
+            // ASSERT
+        }
+
+        [Fact]
         public async Task TestEntrypointCsvDynamoDB()
         {
             // ARRANGE

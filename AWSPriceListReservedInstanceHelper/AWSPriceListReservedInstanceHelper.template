@@ -23,25 +23,7 @@
             "Description" : "The email address notifications will be sent to when processing errors occur.",
             "Type"        : "String"
         },
-        "Frequency"          : {
-            "Description" : "The frequency the function will run based on the time unit set.",
-            "Type"        : "Number",
-            "MinValue"    : 1,
-            "MaxValue"    : 60,
-            "Default"     : 1
-        },
-        "TimeUnit"           : {
-            "Description" : "The unit of time for the frequency.",
-            "Type"        : "String",
-            "AllowedValues" : [
-                "second",
-                "minute",
-                "hour",
-                "day"
-            ],
-            "Default"       : "minute"
-        },
-		"WorkerMemory" : {
+      	"WorkerMemory" : {
 			"Description" : "The amount of memory assigned to the worker function",
 			"Type" : "Number",
 			"AllowedValues" : [
@@ -131,18 +113,6 @@
                     "Ref" : "LogRetentionInDays"
                 },
                 0
-            ]
-        },
-        "AddS"              : {
-            "Fn::Not" : [
-                {
-                    "Fn::Equals" : [
-                        {
-                            "Ref" : "Frequency"
-                        },
-                        1
-                    ]
-                }
             ]
         }
     },
@@ -615,25 +585,18 @@
 					}
 				},
                 "Events"     : {
-                    "Exec" : {
-                        "Type" : "Schedule",
-                        "Properties" : {
-                            "Schedule" : {
-								"Fn::Sub" : [
-									"rate(${Frequency} ${TimeUnit}${S})",
-									{
-										"S" : {
-											"Fn::If" : [
-												"AddS",
-                                                "s",
-                                                ""
-                                            ]
-										}
-									}	
-								]
-                            }
-                        }
-                    }
+					"DailyNotification" : {
+						"Type" : "SNS",
+						"Properties" : {
+							"Topic" : "arn:aws:sns:us-east-1:278350005181:daily-aggregated-price-list-api"
+						}
+					},
+					"ChangeNotification" : {
+						"Type" : "SNS",
+						"Properties" : {
+							"Topic" : "arn:aws:sns:us-east-1:278350005181:price-list-api"
+						}
+					}
                 },
                 "Tags"       : {
                     "Name" : "AWSPriceListRIDistributor",
@@ -814,7 +777,8 @@
 					{
 						"Ref": "SNSTopic"
 					}
-				]
+				],
+				"TreatMissingData" : "ignore"
 			}
 		},
 		"DistributorDeadLetterQueueDepthAlarm": {
@@ -838,7 +802,8 @@
 					{
 						"Ref": "SNSTopic"
 					}
-				]
+				],
+				"TreatMissingData" : "ignore"
 			}
 		}
 	},
