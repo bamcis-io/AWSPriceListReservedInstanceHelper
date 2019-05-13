@@ -12,16 +12,14 @@ namespace AWSPriceListReservedInstanceHelper.Tests
     {
         public FunctionTest()
         {
+            // Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
+            // AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
         }
 
         [Fact]
         public async Task TestEntrypointCsv()
         {
             // ARRANGE
-
-            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
-            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
-           
             TestLambdaLogger TestLogger = new TestLambdaLogger();
             TestClientContext ClientContext = new TestClientContext();
 
@@ -47,9 +45,6 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJson()
         {
             // ARRANGE
-
-            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
-            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
             Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
           
             TestLambdaLogger TestLogger = new TestLambdaLogger();
@@ -77,9 +72,6 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJsonRedshift()
         {
             // ARRANGE
-
-            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
-            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
             Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
             TestLambdaLogger TestLogger = new TestLambdaLogger();
@@ -107,9 +99,6 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJsonDynamoDB()
         {
             // ARRANGE
-
-            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
-            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
             Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
             TestLambdaLogger TestLogger = new TestLambdaLogger();
@@ -137,9 +126,6 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJsonElasticsearch()
         {
             // ARRANGE
-
-            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
-            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
             Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
             TestLambdaLogger TestLogger = new TestLambdaLogger();
@@ -167,10 +153,6 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointCsvRedshift()
         {
             // ARRANGE
-
-            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
-            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
-
             TestLambdaLogger TestLogger = new TestLambdaLogger();
             TestClientContext ClientContext = new TestClientContext();
 
@@ -196,10 +178,6 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointCsvRDS()
         {
             // ARRANGE
-
-            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
-            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
-
             TestLambdaLogger testLogger = new TestLambdaLogger();
             TestClientContext clientContext = new TestClientContext();
 
@@ -225,10 +203,6 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointCsvDynamoDB()
         {
             // ARRANGE
-
-            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
-            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
-
             TestLambdaLogger TestLogger = new TestLambdaLogger();
             TestClientContext ClientContext = new TestClientContext();
 
@@ -254,10 +228,6 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointCsvElasticsearch()
         {
             // ARRANGE
-
-            AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
-            Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
-
             TestLambdaLogger TestLogger = new TestLambdaLogger();
             TestClientContext ClientContext = new TestClientContext();
 
