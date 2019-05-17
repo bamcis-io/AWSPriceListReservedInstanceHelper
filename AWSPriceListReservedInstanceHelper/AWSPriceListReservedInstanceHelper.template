@@ -683,20 +683,7 @@
 						"Ref" : "SNSTopic"
 					}
 				],
-				"AlarmDescription" : {
-					"Fn::Sub" : [
-						"Alarm if Pricelist Reserved Instance Worker does not execute at least five times a day (configured to run every ${Frequency} ${TimeUnit}${S})",
-						{
-							"S" : {
-								"Fn::If" : [
-									"AddS",
-									"s",
-                                    ""
-								]
-							}
-						}
-					]
-				},
+				"AlarmDescription" : "Alarm if Pricelist Reserved Instance Worker does not execute at least six times a day.",
 				"ComparisonOperator" : "LessThanThreshold",
 				"Namespace" : "AWS/Lambda",
 				"MetricName" : "Invocations",
@@ -712,7 +699,8 @@
 				"EvaluationPeriods" : "1",
 				"Threshold" : "5",
 				"Period" : "86400",
-				"Unit" : "Count"
+				"Unit" : "Count",
+				"TreatMissingData" : "notBreaching"
 			}
 		},
 		"CloudWatchDistributorEnsureInvocationAlarm" : {
@@ -724,20 +712,7 @@
 						"Ref" : "SNSTopic"
 					}
 				],
-				"AlarmDescription" : {
-					"Fn::Sub" : [
-						"Alarm if Pricelist Reserved Instance Distributor does not execute at least once a day (configured to run every ${Frequency} ${TimeUnit}${S})",
-						{
-							"S" : {
-								"Fn::If" : [
-									"AddS",
-									"s",
-                                    ""
-								]
-							}
-						}
-					]
-				},
+				"AlarmDescription" : "Alarm if Pricelist Reserved Instance Distributor does not execute at least once a day",
 				"ComparisonOperator" : "LessThanThreshold",
 				"Namespace" : "AWS/Lambda",
 				"MetricName" : "Invocations",
@@ -753,7 +728,8 @@
 				"EvaluationPeriods" : "1",
 				"Threshold" : "1",
 				"Period" : "86400",
-				"Unit" : "Count"
+				"Unit" : "Count",
+				"TreatMissingData" : "notBreaching"
 			}
 		},
 		"WorkerDeadLetterQueueDepthAlarm": {
