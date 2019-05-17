@@ -34,7 +34,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         private static ILambdaContext _context;
         private static PriceListClient priceListClient;
         private static IAmazonS3 s3Client;
-        private static AmazonLambdaClient lambdaClient;
+        private static IAmazonLambda lambdaClient;
         private static IAmazonSimpleNotificationService snsClient;
         private static string snsTopic;
         private static string subject = "AWS RI Price List Helper Error";
@@ -60,6 +60,24 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// </summary>
         public Entrypoint()
         {
+        }
+
+        /// <summary>
+        /// Contstructor used mainly for unit testing so the
+        /// Amazon SDK calls can be mocked
+        /// </summary>
+        /// <param name="sns"></param>
+        /// <param name="s3"></param>
+        /// <param name="lambda"></param>
+        public Entrypoint(
+            IAmazonSimpleNotificationService sns,
+            IAmazonS3 s3,
+            IAmazonLambda lambda
+            )
+        {
+            snsClient = sns;
+            s3Client = s3;
+            lambdaClient = lambda;
         }
 
         #endregion
@@ -120,7 +138,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 string message = "No service was provided in the service request.";
                 context.LogError(message);
                 await SNSNotify(message, context);
-                return;
+                throw new Exception(message);
             }
 
             // Get the product price data for the service
@@ -189,25 +207,8 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 // you will lose content from the csv file
                 csvWriter.Flush();
                 streamWriter.Flush();
-               
-                using (TransferUtility xferUtility = new TransferUtility(s3Client))
-                {
-                    // Make the transfer utility request to post the price data csv content
-                    TransferUtilityUploadRequest request = new TransferUtilityUploadRequest()
-                    {
-                        BucketName = bucket,
-                        Key = $"{response.ServiceCode}.csv",
-                        InputStream = memoryStreamOut,
-                        AutoResetStreamPosition = true,
-                        AutoCloseStream = true
-                    };
 
-                    context.LogInfo($"Starting upload for:        {response.ServiceCode}");
-                    context.LogInfo($"Output stream length:       {memoryStreamOut.Length}");
-
-                    // Make the upload and record the task so we can wait for it finish
-                    await xferUtility.UploadAsync(request);
-                }
+                await UploadCsvToS3(memoryStreamOut, bucket, response.ServiceCode, context);
 
                 context.LogInfo("Completed upload");
             }
@@ -243,6 +244,37 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         #endregion
 
         #region Private Functions
+
+        /// <summary>
+        /// Uploads a memory stream to the specified S3 bucket for the 
+        /// service specified
+        /// </summary>
+        /// <param name="mstream">The memory stream containing the csv data to upload</param>
+        /// <param name="bucket">The bucket to upload to</param>
+        /// <param name="serviceCode">The service the csv data represents</param>
+        /// <param name="context">The ILambdaContext</param>
+        /// <returns></returns>
+        private static async Task UploadCsvToS3(MemoryStream mstream, string bucket, string serviceCode, ILambdaContext context)
+        {
+            using (ITransferUtility xferUtility = new TransferUtility(s3Client))
+            {
+                // Make the transfer utility request to post the price data csv content
+                TransferUtilityUploadRequest request = new TransferUtilityUploadRequest()
+                {
+                    BucketName = bucket,
+                    Key = $"{serviceCode}.csv",
+                    InputStream = mstream,
+                    AutoResetStreamPosition = true,
+                    AutoCloseStream = true
+                };
+
+                context.LogInfo($"Starting upload for:        {serviceCode}");
+                context.LogInfo($"Output stream length:       {mstream.Length}");
+
+                // Make the upload and record the task so we can wait for it finish
+                await xferUtility.UploadAsync(request);
+            }
+        }
 
         /// <summary>
         /// Fills the csvwriter with the data from the product infor

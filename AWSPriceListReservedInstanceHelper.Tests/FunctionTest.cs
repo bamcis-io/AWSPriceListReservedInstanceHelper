@@ -1,10 +1,15 @@
+using Amazon.Lambda;
 using Amazon.Lambda.TestUtilities;
-using Amazon;
+using Amazon.S3;
+using Amazon.S3.Model;
+using Amazon.SimpleNotificationService;
+using BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper;
+using BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models;
+using Moq;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
-using BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models;
-using BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper;
 
 namespace AWSPriceListReservedInstanceHelper.Tests
 {
@@ -12,58 +17,68 @@ namespace AWSPriceListReservedInstanceHelper.Tests
     {
         public FunctionTest()
         {
-            // Environment.SetEnvironmentVariable("BUCKET", $"{Environment.UserName}-pricelist");
-            // AWSConfigs.AWSProfilesLocation = $"{Environment.GetEnvironmentVariable("UserProfile")}\\.aws\\credentials";
+            Environment.SetEnvironmentVariable("BUCKET", "mybucket");
         }
 
         [Fact]
-        public async Task TestEntrypointCsv()
+        public async Task TestEntrypointCsvEC2()
         {
             // ARRANGE
-            TestLambdaLogger TestLogger = new TestLambdaLogger();
-            TestClientContext ClientContext = new TestClientContext();
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
 
-            TestLambdaContext Context = new TestLambdaContext()
+            TestLambdaContext context = new TestLambdaContext()
             {
                 FunctionName = "PriceListApiFormatter",
                 FunctionVersion = "1",
-                Logger = TestLogger,
-                ClientContext = ClientContext
+                Logger = testLogger,
+                ClientContext = clientContext
             };
 
-            ServiceRequest SR = new ServiceRequest("AmazonEC2");
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonEC2");
 
-            Entrypoint Ep = new Entrypoint();
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
 
             // ACT
-            await Ep.RunForServiceAsync(SR, Context);
+            await entry.RunForServiceAsync(serviceRequest, context);
 
             // ASSERT
         }
 
         [Fact]
-        public async Task TestEntrypointJson()
+        public async Task TestEntrypointJsonEC2()
         {
             // ARRANGE
             Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
-          
-            TestLambdaLogger TestLogger = new TestLambdaLogger();
-            TestClientContext ClientContext = new TestClientContext();
 
-            TestLambdaContext Context = new TestLambdaContext()
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
+
+            TestLambdaContext context = new TestLambdaContext()
             {
                 FunctionName = "PriceListApiFormatter",
                 FunctionVersion = "1",
-                Logger = TestLogger,
-                ClientContext = ClientContext
+                Logger = testLogger,
+                ClientContext = clientContext
             };
 
-            ServiceRequest SR = new ServiceRequest("AmazonEC2");
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonEC2");
 
-            Entrypoint Ep = new Entrypoint();
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
 
             // ACT
-            await Ep.RunForServiceAsync(SR, Context);
+            await entry.RunForServiceAsync(serviceRequest, context);
 
             // ASSERT
         }
@@ -73,24 +88,31 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         {
             // ARRANGE
             Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+            Environment.SetEnvironmentVariable("BUCKET", "mybucket");
 
-            TestLambdaLogger TestLogger = new TestLambdaLogger();
-            TestClientContext ClientContext = new TestClientContext();
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
 
-            TestLambdaContext Context = new TestLambdaContext()
+            TestLambdaContext context = new TestLambdaContext()
             {
                 FunctionName = "PriceListApiFormatter",
                 FunctionVersion = "1",
-                Logger = TestLogger,
-                ClientContext = ClientContext
+                Logger = testLogger,
+                ClientContext = clientContext
             };
 
-            ServiceRequest SR = new ServiceRequest("AmazonRedshift");
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonRedshift");
 
-            Entrypoint Ep = new Entrypoint();
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
 
             // ACT
-            await Ep.RunForServiceAsync(SR, Context);
+            await entry.RunForServiceAsync(serviceRequest, context);
 
             // ASSERT
         }
@@ -101,23 +123,29 @@ namespace AWSPriceListReservedInstanceHelper.Tests
             // ARRANGE
             Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
-            TestLambdaLogger TestLogger = new TestLambdaLogger();
-            TestClientContext ClientContext = new TestClientContext();
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
 
-            TestLambdaContext Context = new TestLambdaContext()
+            TestLambdaContext context = new TestLambdaContext()
             {
                 FunctionName = "PriceListApiFormatter",
                 FunctionVersion = "1",
-                Logger = TestLogger,
-                ClientContext = ClientContext
+                Logger = testLogger,
+                ClientContext = clientContext
             };
 
-            ServiceRequest SR = new ServiceRequest("AmazonDynamoDB");
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonDynamoDB");
 
-            Entrypoint Ep = new Entrypoint();
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
 
             // ACT
-            await Ep.RunForServiceAsync(SR, Context);
+            await entry.RunForServiceAsync(serviceRequest, context);
 
             // ASSERT
         }
@@ -128,23 +156,29 @@ namespace AWSPriceListReservedInstanceHelper.Tests
             // ARRANGE
             Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
-            TestLambdaLogger TestLogger = new TestLambdaLogger();
-            TestClientContext ClientContext = new TestClientContext();
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
 
-            TestLambdaContext Context = new TestLambdaContext()
+            TestLambdaContext context = new TestLambdaContext()
             {
                 FunctionName = "PriceListApiFormatter",
                 FunctionVersion = "1",
-                Logger = TestLogger,
-                ClientContext = ClientContext
+                Logger = testLogger,
+                ClientContext = clientContext
             };
 
-            ServiceRequest SR = new ServiceRequest("AmazonES");
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonES");
 
-            Entrypoint Ep = new Entrypoint();
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
 
             // ACT
-            await Ep.RunForServiceAsync(SR, Context);
+            await entry.RunForServiceAsync(serviceRequest, context);
 
             // ASSERT
         }
@@ -153,23 +187,28 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointCsvRedshift()
         {
             // ARRANGE
-            TestLambdaLogger TestLogger = new TestLambdaLogger();
-            TestClientContext ClientContext = new TestClientContext();
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
 
-            TestLambdaContext Context = new TestLambdaContext()
+            TestLambdaContext context = new TestLambdaContext()
             {
                 FunctionName = "PriceListApiFormatter",
                 FunctionVersion = "1",
-                Logger = TestLogger,
-                ClientContext = ClientContext
+                Logger = testLogger,
+                ClientContext = clientContext
             };
 
-            ServiceRequest SR = new ServiceRequest("AmazonRedshift");
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonRedshift");
 
-            Entrypoint Ep = new Entrypoint();
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
 
             // ACT
-            await Ep.RunForServiceAsync(SR, Context);
+            await entry.RunForServiceAsync(serviceRequest, context);
 
             // ASSERT
         }
@@ -181,7 +220,7 @@ namespace AWSPriceListReservedInstanceHelper.Tests
             TestLambdaLogger testLogger = new TestLambdaLogger();
             TestClientContext clientContext = new TestClientContext();
 
-            TestLambdaContext Context = new TestLambdaContext()
+            TestLambdaContext context = new TestLambdaContext()
             {
                 FunctionName = "PriceListApiFormatter",
                 FunctionVersion = "1",
@@ -191,10 +230,113 @@ namespace AWSPriceListReservedInstanceHelper.Tests
 
             ServiceRequest request = new ServiceRequest("AmazonRDS");
 
-            Entrypoint entrypoint = new Entrypoint();
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
 
             // ACT
-            await entrypoint.RunForServiceAsync(request, Context);
+            await entry.RunForServiceAsync(request, context);
+
+            // ASSERT
+        }
+
+        [Fact]
+        public async Task TestEntrypointJsonRDS()
+        {
+            // ARRANGE
+            Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
+
+            TestLambdaContext context = new TestLambdaContext()
+            {
+                FunctionName = "PriceListApiFormatter",
+                FunctionVersion = "1",
+                Logger = testLogger,
+                ClientContext = clientContext
+            };
+
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonRDS");
+
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
+
+            // ACT
+            await entry.RunForServiceAsync(serviceRequest, context);
+
+            // ASSERT
+        }
+
+        [Fact]
+        public async Task TestEntrypointCsvElastiCache()
+        {
+            // ARRANGE
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
+
+            TestLambdaContext context = new TestLambdaContext()
+            {
+                FunctionName = "PriceListApiFormatter",
+                FunctionVersion = "1",
+                Logger = testLogger,
+                ClientContext = clientContext
+            };
+
+            ServiceRequest request = new ServiceRequest("AmazonElastiCache");
+
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
+
+            // ACT
+            await entry.RunForServiceAsync(request, context);
+
+            // ASSERT
+        }
+
+        [Fact]
+        public async Task TestEntrypointJsonElastiCache()
+        {
+            // ARRANGE
+            Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
+
+            TestLambdaContext context = new TestLambdaContext()
+            {
+                FunctionName = "PriceListApiFormatter",
+                FunctionVersion = "1",
+                Logger = testLogger,
+                ClientContext = clientContext
+            };
+
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonElastiCache");
+
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
+
+            // ACT
+            await entry.RunForServiceAsync(serviceRequest, context);
 
             // ASSERT
         }
@@ -203,23 +345,29 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointCsvDynamoDB()
         {
             // ARRANGE
-            TestLambdaLogger TestLogger = new TestLambdaLogger();
-            TestClientContext ClientContext = new TestClientContext();
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
 
-            TestLambdaContext Context = new TestLambdaContext()
+            TestLambdaContext context = new TestLambdaContext()
             {
                 FunctionName = "PriceListApiFormatter",
                 FunctionVersion = "1",
-                Logger = TestLogger,
-                ClientContext = ClientContext
+                Logger = testLogger,
+                ClientContext = clientContext
             };
 
-            ServiceRequest SR = new ServiceRequest("AmazonDynamoDB");
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonDynamoDB");
 
-            Entrypoint Ep = new Entrypoint();
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
 
             // ACT
-            await Ep.RunForServiceAsync(SR, Context);
+            await entry.RunForServiceAsync(serviceRequest, context);
 
             // ASSERT
         }
@@ -228,23 +376,29 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointCsvElasticsearch()
         {
             // ARRANGE
-            TestLambdaLogger TestLogger = new TestLambdaLogger();
-            TestClientContext ClientContext = new TestClientContext();
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
 
-            TestLambdaContext Context = new TestLambdaContext()
+            TestLambdaContext context = new TestLambdaContext()
             {
                 FunctionName = "PriceListApiFormatter",
                 FunctionVersion = "1",
-                Logger = TestLogger,
-                ClientContext = ClientContext
+                Logger = testLogger,
+                ClientContext = clientContext
             };
 
-            ServiceRequest SR = new ServiceRequest("AmazonES");
+            ServiceRequest serviceRequest = new ServiceRequest("AmazonES");
 
-            Entrypoint Ep = new Entrypoint();
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();
+            s3.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default(CancellationToken))).Returns(Task.FromResult(new PutObjectResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
 
             // ACT
-            await Ep.RunForServiceAsync(SR, Context);
+            await entry.RunForServiceAsync(serviceRequest, context);
 
             // ASSERT
         }
