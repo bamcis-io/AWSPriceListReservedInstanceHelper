@@ -18,7 +18,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <summary>
         /// The map of usage type prefix strings to the region strings
         /// </summary>
-        private static IDictionary<string, string> RegionMap = new Dictionary<string, string>()
+        private static IDictionary<string, string> regionMap = new Dictionary<string, string>()
         {
             { "", "us-east-1"},
             { "USE2", "us-east-2" },
@@ -71,11 +71,11 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <returns></returns>
         private static string ParseUsageType(string usageType)
         {
-            Match RegexMatch = UsageTypeParser.Match(usageType);
+            Match regexMatch = UsageTypeParser.Match(usageType);
 
-            if (RegexMatch.Success)
+            if (regexMatch.Success)
             {
-                return RegexMatch.Groups[1].Value;
+                return regexMatch.Groups[1].Value;
             }
             else
             {
@@ -90,16 +90,15 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <returns></returns>
         private static string GetRegion(string value)
         {
-            if (RegionMap.ContainsKey(value))
+            if (regionMap.ContainsKey(value))
             {
-                return RegionMap[value];
+                return regionMap[value];
             }
             else
             {
                 return String.Empty;
             }
         }
-
 
         #endregion
     }

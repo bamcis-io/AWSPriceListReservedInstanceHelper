@@ -1,4 +1,6 @@
 using Amazon.Lambda;
+using Amazon.Lambda.Model;
+using Amazon.Lambda.SNSEvents;
 using Amazon.Lambda.TestUtilities;
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -7,6 +9,7 @@ using BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper;
 using BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models;
 using Moq;
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -17,7 +20,163 @@ namespace AWSPriceListReservedInstanceHelper.Tests
     {
         public FunctionTest()
         {
-            Environment.SetEnvironmentVariable("BUCKET", "mybucket");
+            System.Environment.SetEnvironmentVariable("BUCKET", "mybucket");
+        }
+
+        [Fact]
+        public void TestStreamIndexOfSuccessMiddle()
+        {
+            // ARRANGE
+            byte[] bytesToSearch = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05};
+
+            byte[] pattern = new byte[] { 0x02, 0x03 };
+
+            long index;
+
+            // ACT
+            using (MemoryStream stream = new MemoryStream(bytesToSearch, false))
+            {
+                index = stream.IndexOf(pattern);
+
+                // ASSERT
+                Assert.Equal(2, index);
+                Assert.Equal(0, stream.Position);
+            }          
+        }
+
+        [Fact]
+        public void TestStreamIndexOfSuccessBeginning()
+        {
+            // ARRANGE
+            byte[] bytesToSearch = new byte[] { 0x02, 0x03, 0x02, 0x03, 0x04, 0x05 };
+
+            byte[] pattern = new byte[] { 0x02, 0x03 };
+
+            long index;
+
+            // ACT
+            using (MemoryStream stream = new MemoryStream(bytesToSearch, false))
+            {
+                index = stream.IndexOf(pattern);
+
+                // ASSERT
+                Assert.Equal(0, index);
+                Assert.Equal(0, stream.Position);
+            }
+        }
+
+        [Fact]
+        public void TestStreamIndexOfSuccessEnd()
+        {
+            // ARRANGE
+            byte[] bytesToSearch = new byte[] { 0x01, 0x03, 0x02, 0x04, 0x02, 0x03 };
+
+            byte[] pattern = new byte[] { 0x02, 0x03 };
+
+            long index;
+
+            // ACT
+            using (MemoryStream stream = new MemoryStream(bytesToSearch, false))
+            {
+                index = stream.IndexOf(pattern);
+
+                // ASSERT
+                Assert.Equal(4, index);
+                Assert.Equal(0, stream.Position);
+            }
+        }
+
+        [Fact]
+        public void TestStreamIndexOfFailure()
+        {
+            // ARRANGE
+            byte[] bytesToSearch = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05 };
+
+            byte[] pattern = new byte[] { 0x03, 0x02 };
+
+            long index;
+
+            // ACT
+            using (MemoryStream stream = new MemoryStream(bytesToSearch, false))
+            {
+                index = stream.IndexOf(pattern);
+
+                // ASSERT
+                Assert.Equal(-1, index);
+                Assert.Equal(0, stream.Position);
+            }
+        }
+
+        [Fact]
+        public void TestStreamIndexOfFailureNoMatches()
+        {
+            // ARRANGE
+            byte[] bytesToSearch = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05 };
+
+            byte[] pattern = new byte[] { 0x06, 0x07 };
+
+            long index;
+
+            // ACT
+            using (MemoryStream stream = new MemoryStream(bytesToSearch, false))
+            {
+                index = stream.IndexOf(pattern);
+
+                // ASSERT
+                Assert.Equal(-1, index);
+                Assert.Equal(0, stream.Position);
+            }
+        }
+
+        [Fact]
+        public void TestStreamIndexOfFailureSomeMatches()
+        {
+            // ARRANGE
+            byte[] bytesToSearch = new byte[] { 0x00, 0x01, 0x02, 0x02, 0x01, 0x03 };
+
+            byte[] pattern = new byte[] { 0x02, 0x03 };
+
+            long index;
+
+            // ACT
+            using (MemoryStream stream = new MemoryStream(bytesToSearch, false))
+            {
+                index = stream.IndexOf(pattern);
+
+                // ASSERT
+                Assert.Equal(-1, index);
+                Assert.Equal(0, stream.Position);
+            }
+        }
+        
+        [Fact]
+        public async Task TestDistributor()
+        {
+            // ARRANGE
+            TestLambdaLogger testLogger = new TestLambdaLogger();
+            TestClientContext clientContext = new TestClientContext();
+
+            TestLambdaContext context = new TestLambdaContext()
+            {
+                FunctionName = "PriceListApiFormatter",
+                FunctionVersion = "1",
+                Logger = testLogger,
+                ClientContext = clientContext
+            };
+
+            SNSEvent ev = new SNSEvent();
+
+            Mock<IAmazonS3> s3 = new Mock<IAmazonS3>();
+            Mock<IAmazonLambda> lambda = new Mock<IAmazonLambda>();
+            Mock<IAmazonSimpleNotificationService> sns = new Mock<IAmazonSimpleNotificationService>();            
+            lambda.Setup(x => x.InvokeAsync(It.IsAny<InvokeRequest>(), default(CancellationToken))).Returns(Task.FromResult(new InvokeResponse()));
+
+            Entrypoint entry = new Entrypoint(sns.Object, s3.Object, lambda.Object);
+
+            // ACT
+            await entry.LaunchWorkersAsync(ev, context);
+
+            // ASSERT
         }
 
         [Fact]
@@ -54,7 +213,7 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJsonEC2()
         {
             // ARRANGE
-            Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+            System.Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
             TestLambdaLogger testLogger = new TestLambdaLogger();
             TestClientContext clientContext = new TestClientContext();
@@ -87,8 +246,8 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJsonRedshift()
         {
             // ARRANGE
-            Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
-            Environment.SetEnvironmentVariable("BUCKET", "mybucket");
+            System.Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+            System.Environment.SetEnvironmentVariable("BUCKET", "mybucket");
 
             TestLambdaLogger testLogger = new TestLambdaLogger();
             TestClientContext clientContext = new TestClientContext();
@@ -121,7 +280,7 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJsonDynamoDB()
         {
             // ARRANGE
-            Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+            System.Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
             TestLambdaLogger testLogger = new TestLambdaLogger();
             TestClientContext clientContext = new TestClientContext();
@@ -154,7 +313,7 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJsonElasticsearch()
         {
             // ARRANGE
-            Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+            System.Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
             TestLambdaLogger testLogger = new TestLambdaLogger();
             TestClientContext clientContext = new TestClientContext();
@@ -248,7 +407,7 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJsonRDS()
         {
             // ARRANGE
-            Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+            System.Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
             TestLambdaLogger testLogger = new TestLambdaLogger();
             TestClientContext clientContext = new TestClientContext();
@@ -312,7 +471,7 @@ namespace AWSPriceListReservedInstanceHelper.Tests
         public async Task TestEntrypointJsonElastiCache()
         {
             // ARRANGE
-            Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
+            System.Environment.SetEnvironmentVariable("PRICELIST_FORMAT", "json");
 
             TestLambdaLogger testLogger = new TestLambdaLogger();
             TestClientContext clientContext = new TestClientContext();

@@ -1,6 +1,7 @@
 using Amazon.Lambda;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.Model;
+using Amazon.Lambda.SNSEvents;
 using Amazon.S3;
 using Amazon.S3.Transfer;
 using Amazon.SimpleNotificationService;
@@ -41,6 +42,10 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 
         // Use the pipe so that commas in strings don't cause an issue
         private static readonly string defaultDelimiter = "|";
+
+        // These bytes represent the string "SKU", in UTF8, and is where the csv
+        // files needs to start being read from
+        private static byte[] skuStringBytes = new byte[] { 0x22, 0x53, 0x4B, 0x55, 0x22, 0x2C };
 
         #endregion
 
@@ -90,9 +95,11 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <param name="ev"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public async Task LaunchWorkersAsync(CloudWatchScheduledEvent ev, ILambdaContext context)
+        public async Task LaunchWorkersAsync(SNSEvent ev, ILambdaContext context)
         {
             _context = context;
+            context.LogInfo(JsonConvert.SerializeObject(ev));
+
             List<Task<InvokeResponse>> response = new List<Task<InvokeResponse>>();
 
             foreach (string service in Constants.ReservableServices)
@@ -196,6 +203,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 
                 // Retrieve the finished get product price data response
                 GetProductResponse response = await priceListClient.GetProductAsync(productRequest);
+                string service = response.ServiceCode;
 
                 context.LogInfo("Parsing price list data.");
 
@@ -208,7 +216,10 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 csvWriter.Flush();
                 streamWriter.Flush();
 
-                await UploadCsvToS3(memoryStreamOut, bucket, response.ServiceCode, context);
+                response.ProductInfo.Dispose();
+                response = null;
+
+                await UploadCsvToS3(memoryStreamOut, bucket, service, context);
 
                 context.LogInfo("Completed upload");
             }
@@ -282,7 +293,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// <param name="productInfo">The product info data</param>
         /// <param name="writer">The csv writer to fill</param>
         /// <param name="format">The format of the product info data</param>
-        private async Task FillOutputStreamWriter(string productInfo, CsvWriter writer, Format format)
+        private async Task FillOutputStreamWriter(Stream productInfo, CsvWriter writer, Format format)
         {
             switch (format)
             {
@@ -307,26 +318,27 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         /// </summary>
         /// <param name="csv"></param>
         /// <param name="writer"></param>
-        private async Task GetFromCsv(string csv, CsvWriter writer)
+        private async Task GetFromCsv(Stream csv, CsvWriter writer)
         {
             // Find the the beginning of the header line
             // and remove the version data, etc from the csv
-            int index = csv.IndexOf("\"SKU\",");
+            long startIndex = csv.IndexOf(skuStringBytes);
+            csv.Position = startIndex;
 
-            using (MemoryStream mstream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(csv, index, csv.Length - index)))
+            Dictionary<string, List<CsvRowItem>> rows = new Dictionary<string, List<CsvRowItem>>();
+
+            try
             {
-                using (StreamReader streamReader = new StreamReader(mstream))
+                using (StreamReader streamReader = new StreamReader(csv))
                 {
                     using (CsvReader reader = new CsvReader(streamReader))
                     {
                         // Make all of the headers lowercase so we don't have to worry about
                         // case sensitivity later
-                        reader.Configuration.PrepareHeaderForMatch = Header => Header.ToLower();
+                        reader.Configuration.PrepareHeaderForMatch = (header, index) => header.ToLower();
 
                         reader.Read(); // Advance to the next row, which is the header row
                         reader.ReadHeader(); // Read the headers
-
-                        List<CsvRowItem> rows = new List<CsvRowItem>();
 
                         while (reader.Read()) // Read all lines in the CSV
                         {
@@ -335,55 +347,61 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 
                             if (row != null)
                             {
-                                rows.Add(row);
-                            }
-                        } // Close while loop
-
-                        try
-                        {
-                            List<ReservedInstancePricingTerm> terms = new List<ReservedInstancePricingTerm>();
-
-                            foreach (IGrouping<string, CsvRowItem> item in rows.GroupBy(x => x.Sku))
-                            {
-                                try
+                                if (!rows.ContainsKey(row.Sku))
                                 {
-                                    // Force the list to be enumerated to throw exceptions here
-                                    // and catch them, for example if we can't find an on demand
-                                    // pricing term in this set
-                                    List<ReservedInstancePricingTerm> row = ReservedInstancePricingTerm.BuildFromCsv(item).ToList();
-                                    terms.AddRange(row);
+                                    rows.Add(row.Sku, new List<CsvRowItem>());
                                 }
-                                catch (Exception e)
-                                {
-                                    _context.LogError(e);
-                                    await SNSNotify(e, _context);
-                                    // Don't throw, at least populate with data that has all
-                                    // required info
-                                }
-                            }
 
-                            writer.WriteRecords<ReservedInstancePricingTerm>(terms);
-                        }
-                        catch (Exception e)
-                        {
-                            _context.LogError(e);
-                            await SNSNotify(e, _context);
-                            throw e;
-                        }
-                        
+                                rows[row.Sku].Add(row);
+                            }
+                        } // Close while loop 
                     } // Close CsvReader
                 } // Close StreamReader
-            } // Close Memory input stream
+
+                List<ReservedInstancePricingTerm> terms = new List<ReservedInstancePricingTerm>();
+
+                foreach (KeyValuePair<string, List<CsvRowItem>> item in rows)
+                {
+                    try
+                    {
+                        // Force the list to be enumerated to throw exceptions here
+                        // and catch them, for example if we can't find an on demand
+                        // pricing term in this set
+                        List<ReservedInstancePricingTerm> row = ReservedInstancePricingTerm.BuildFromCsv(item).ToList();
+                        terms.AddRange(row);
+                    }
+                    catch (Exception e)
+                    {
+                        _context.LogError(e);
+                        await SNSNotify(e, _context);
+                        // Don't throw, at least populate with data that has all
+                        // required info
+                    }
+                }
+
+                writer.WriteRecords<ReservedInstancePricingTerm>(terms);
+            }
+            catch (Exception e)
+            {
+                _context.LogError(e);
+                await SNSNotify(e, _context);
+                throw e;
+            }
         }
-      
+
         /// <summary>
         /// Converts the price list data from json into our formatted csv
         /// </summary>
         /// <param name="json"></param>
         /// <param name="writer"></param>
-        private async Task GetFromJson(string json, CsvWriter writer)
+        private async Task GetFromJson(Stream json, CsvWriter writer)
         {
-            ProductOffer offer = ProductOffer.FromJson(json);
+            json.Position = 0;
+            ProductOffer offer;
+            using (StreamReader reader = new StreamReader(json))
+            {
+                offer = ProductOffer.FromJson(reader.ReadToEnd());
+            }
 
             /*  
              *  Old implementation, don't need such a complex grouping, just iterate

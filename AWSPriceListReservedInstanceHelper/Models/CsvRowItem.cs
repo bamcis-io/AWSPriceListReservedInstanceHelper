@@ -23,13 +23,13 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         /// Node - Redshift
         /// WriteCapacityUnit/ReadCapacityUnit - DynamoDB
         /// </summary>
-        private static readonly Regex _AllUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage|\bNode\b|\bWriteCapacityUnit|\bReadCapacityUnit)", RegexOptions.IgnoreCase);
+        private static readonly Regex allUsageTypes = new Regex(@"(?:\bBoxUsage\b|HeavyUsage|DedicatedUsage|NodeUsage|Multi-AZUsage|InstanceUsage|HostBoxUsage|\bNode\b|\bWriteCapacityUnit|\bReadCapacityUnit)", RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Finds the amount of memory allocated to an instance
         /// This should be used only after removing commas from the input string
         /// </summary>
-        private static readonly Regex _MemoryRegex = new Regex(@"^\s*([0-9]+(?:\.?[0-9]+)?)\s+GiB\s*$", RegexOptions.IgnoreCase);
+        private static readonly Regex memoryRegex = new Regex(@"^\s*([0-9]+(?:\.?[0-9]+)?)\s+GiB\s*$", RegexOptions.IgnoreCase);
 
         #endregion
 
@@ -183,114 +183,115 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 
         /// <summary>
         /// Builds a row item from the current line of the csv reader, this method
-        /// does not change the position of the csv reader
+        /// does not change the position of the csv reader. If the row item
+        /// does not describe a "reservable" charge, then null is returned
         /// </summary>
         /// <param name="reader">The csv reader to read from</param>
         /// <returns></returns>
         public static CsvRowItem Build(CsvReader reader)
         {
-            string InstanceType = String.Empty;
+            string instanceType = String.Empty;
 
             // The field names are case sensitive
-            if (reader.TryGetField<string>("operation", out string Operation)
-               && !String.IsNullOrEmpty(Operation)
-               && reader.TryGetField<string>("usagetype", out string UsageType)
-               && _AllUsageTypes.IsMatch(UsageType)
-               && reader.TryGetField<string>("servicecode", out string ServiceCode)
-               && !String.IsNullOrEmpty(ServiceCode)
-               && (Constants.InstanceBasedReservableServices.Contains(ServiceCode) ? reader.TryGetField("instance type", out InstanceType) : true)
+            if (reader.TryGetField<string>("operation", out string operation)
+               && !String.IsNullOrEmpty(operation)
+               && reader.TryGetField<string>("usagetype", out string usageType)
+               && allUsageTypes.IsMatch(usageType)
+               && reader.TryGetField<string>("servicecode", out string serviceCode)
+               && !String.IsNullOrEmpty(serviceCode)
+               && (Constants.InstanceBasedReservableServices.Contains(serviceCode) ? reader.TryGetField("instance type", out instanceType) : true)
            )
             {
-                reader.TryGetField<string>("sku", out string Sku);
-                reader.TryGetField<double>("priceperunit", out double PricePerUnit);
-                reader.TryGetField<string>("leasecontractlength", out string LeaseContractLength);
-                reader.TryGetField<string>("pricedescription", out string PriceDescription);
-                reader.TryGetField<string>("offertermcode", out string OfferTermCode);
+                reader.TryGetField<string>("sku", out string sku);
+                reader.TryGetField<double>("priceperunit", out double pricePerUnit);
+                reader.TryGetField<string>("leasecontractlength", out string leaseContractLength);
+                reader.TryGetField<string>("pricedescription", out string priceDescription);
+                reader.TryGetField<string>("offertermcode", out string offerTermCode);
                 reader.TryGetField<int>("vcpu", out int vCPU);
-                reader.TryGetField<string>("memory", out string MemoryString);
+                reader.TryGetField<string>("memory", out string memoryString);
 
-                double Memory = 0;
+                double memory = 0;
 
-                if (!String.IsNullOrEmpty(MemoryString))
+                if (!String.IsNullOrEmpty(memoryString))
                 {
-                    MemoryString = MemoryString.Replace(",", "");
+                    memoryString = memoryString.Replace(",", "");
 
-                    Match MemoryMatch = _MemoryRegex.Match(MemoryString);
+                    Match memoryMatch = memoryRegex.Match(memoryString);
 
-                    if (MemoryMatch.Success)
+                    if (memoryMatch.Success)
                     {
-                        Double.TryParse(MemoryMatch.Groups[1].Value, out Memory);
+                        Double.TryParse(memoryMatch.Groups[1].Value, out memory);
                     }
                 }
 
-                Term TermType = Term.ON_DEMAND;
+                Term termType = Term.ON_DEMAND;
 
-                if (reader.TryGetField<string>("termtype", out string TermString))
+                if (reader.TryGetField<string>("termtype", out string termString))
                 {
-                    TermType = EnumConverters.ConvertToTerm(TermString);
+                    termType = EnumConverters.ConvertToTerm(termString);
                 }
 
-                if (String.IsNullOrEmpty(InstanceType))
+                if (String.IsNullOrEmpty(instanceType))
                 {
                     // This will probably only happen for DynamoDB
-                    InstanceType = UsageType;
+                    instanceType = usageType;
                 }
 
-                PurchaseOption PurchaseOption = PurchaseOption.ON_DEMAND;
+                PurchaseOption purchaseOption = PurchaseOption.ON_DEMAND;
 
                 if (reader.TryGetField<string>("purchaseoption", out string PurchaseOptionString))
                 {
-                    PurchaseOption = EnumConverters.ConvertToPurchaseOption(PurchaseOptionString);
+                    purchaseOption = EnumConverters.ConvertToPurchaseOption(PurchaseOptionString);
                 }
 
-                OfferingClass OfferingClass = OfferingClass.STANDARD;
+                OfferingClass offeringClass = OfferingClass.STANDARD;
 
-                if (reader.TryGetField<string>("offeringclass", out string OfferingClassString))
+                if (reader.TryGetField<string>("offeringclass", out string offeringClassString))
                 {
-                    OfferingClass = EnumConverters.ConvertToOfferingClass(OfferingClassString);
+                    offeringClass = EnumConverters.ConvertToOfferingClass(offeringClassString);
                 }
 
                 // Only EC2 has tenancy
-                if (!reader.TryGetField<string>("tenancy", out string Tenancy))
+                if (!reader.TryGetField<string>("tenancy", out string tenancy))
                 {
-                    Tenancy = "Shared";
+                    tenancy = "Shared";
                 }
 
-                int Lease = String.IsNullOrEmpty(LeaseContractLength) ? 0 : Int32.Parse(Regex.Match(LeaseContractLength, "^([0-9]+)").Groups[1].Value);
+                int lease = String.IsNullOrEmpty(leaseContractLength) ? 0 : Int32.Parse(Regex.Match(leaseContractLength, "^([0-9]+)").Groups[1].Value);
 
-                string Platform = GetPlatform(reader);
+                string platform = GetPlatform(reader);
 
-                if (!reader.TryGetField<string>("operating system", out string OperatingSystem))
+                if (!reader.TryGetField<string>("operating system", out string operatingSystem))
                 {
-                    if (!String.IsNullOrEmpty(Platform))
+                    if (!String.IsNullOrEmpty(platform))
                     {
-                        OperatingSystem = Platform;
+                        operatingSystem = platform;
                     }
                     else
                     {
-                        OperatingSystem = ServiceCode;
+                        operatingSystem = serviceCode;
                     }
                 }
 
                 return new CsvRowItem(
-                    Sku,
-                    OfferTermCode,
-                    TermType,
-                    Lease,
-                    PricePerUnit,
+                    sku,
+                    offerTermCode,
+                    termType,
+                    lease,
+                    pricePerUnit,
                     vCPU,
-                    Memory,
-                    PurchaseOption,
-                    OfferingClass,
-                    Tenancy,
-                    InstanceType,
-                    Platform,
-                    OperatingSystem,
-                    Operation,
-                    UsageType,
-                    ServiceCode,
-                    RegionMapper.GetRegionFromUsageType(UsageType),
-                    PriceDescription
+                    memory,
+                    purchaseOption,
+                    offeringClass,
+                    tenancy,
+                    instanceType,
+                    platform,
+                    operatingSystem,
+                    operation,
+                    usageType,
+                    serviceCode,
+                    RegionMapper.GetRegionFromUsageType(usageType),
+                    priceDescription
                 );
             }
             else
@@ -310,42 +311,42 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         /// <returns></returns>
         private static string GetPlatform(CsvReader reader)
         {
-            StringBuilder Buffer = new StringBuilder();
+            StringBuilder buffer = new StringBuilder();
 
-            if (reader.TryGetField<string>("servicecode", out string ServiceCode))
+            if (reader.TryGetField<string>("servicecode", out string serviceCode))
             {
-                reader.TryGetField("license model", out string LicenseModel);
+                reader.TryGetField("license model", out string licenseModel);
 
-                switch (ServiceCode.ToLower())
+                switch (serviceCode.ToLower())
                 {
                     case "amazonrds":
                         {
-                            reader.TryGetField("database engine", out string DatabaseEngine);
-                            reader.TryGetField("database edition", out string DatabaseEdition);
+                            reader.TryGetField("database engine", out string databaseEngine);
+                            reader.TryGetField("database edition", out string databaseEdition);
 
-                            Buffer.Append("RDS ").Append(DatabaseEngine);
+                            buffer.Append("RDS ").Append(databaseEngine);
 
-                            switch (DatabaseEngine.ToLower())
+                            switch (databaseEngine.ToLower())
                             {
                                 case "sql server":
                                     {
-                                        if (!String.IsNullOrEmpty(DatabaseEdition))
+                                        if (!String.IsNullOrEmpty(databaseEdition))
                                         {
-                                            switch (DatabaseEdition.ToLower())
+                                            switch (databaseEdition.ToLower())
                                             {
                                                 case "enterprise":
                                                     {
-                                                        Buffer.Append(" EE");
+                                                        buffer.Append(" EE");
                                                         break;
                                                     }
                                                 case "standard":
                                                     {
-                                                        Buffer.Append(" SE");
+                                                        buffer.Append(" SE");
                                                         break;
                                                     }
                                                 case "web":
                                                     {
-                                                        Buffer.Append(" Web");
+                                                        buffer.Append(" Web");
                                                         break;
                                                     }
                                             }
@@ -354,28 +355,28 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                                     }
                                 case "oracle":
                                     {
-                                        if (!String.IsNullOrEmpty(DatabaseEdition))
+                                        if (!String.IsNullOrEmpty(databaseEdition))
                                         {
-                                            switch (DatabaseEdition.ToLower())
+                                            switch (databaseEdition.ToLower())
                                             {
                                                 case "enterprise":
                                                     {
-                                                        Buffer.Append(" EE");
+                                                        buffer.Append(" EE");
                                                         break;
                                                     }
                                                 case "standard":
                                                     {
-                                                        Buffer.Append(" SE");
+                                                        buffer.Append(" SE");
                                                         break;
                                                     }
                                                 case "standard one":
                                                     {
-                                                        Buffer.Append(" SE1");
+                                                        buffer.Append(" SE1");
                                                         break;
                                                     }
                                                 case "standard two":
                                                     {
-                                                        Buffer.Append(" SE2");
+                                                        buffer.Append(" SE2");
                                                         break;
                                                     }
                                             }
@@ -385,11 +386,11 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                                     }
                             }
 
-                            switch (LicenseModel.ToLower())
+                            switch (licenseModel.ToLower())
                             {
                                 case "bring your own license":
                                     {
-                                        Buffer.Append(" BYOL");
+                                        buffer.Append(" BYOL");
                                         break;
                                     }
 
@@ -401,24 +402,24 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                                     }
                             }
 
-                            if (reader.TryGetField("deployment option", out string DeploymentOption) &&
-                                DeploymentOption.Equals("Multi-AZ", StringComparison.OrdinalIgnoreCase))
+                            if (reader.TryGetField("deployment option", out string deploymentOption) &&
+                                deploymentOption.Equals("Multi-AZ", StringComparison.OrdinalIgnoreCase))
                             {
-                                Buffer.Append(" Multi-AZ");
+                                buffer.Append(" Multi-AZ");
                             }
 
                             break;
                         }
                     case "amazonec2":
                         {
-                            reader.TryGetField("operating system", out string OperatingSystem);
-                            Buffer.Append(OperatingSystem);
+                            reader.TryGetField("operating system", out string operatingSystem);
+                            buffer.Append(operatingSystem);
 
-                            switch (LicenseModel.ToLower())
+                            switch (licenseModel.ToLower())
                             {
                                 case "bring your own license":
                                     {
-                                        Buffer.Append(" BYOL");
+                                        buffer.Append(" BYOL");
                                         break;
                                     }
 
@@ -430,64 +431,69 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                                     }
                             }
 
-                            if (reader.TryGetField("pre installed s/w", out string PreInstalledSW) &&
-                                !PreInstalledSW.Equals("NA", StringComparison.OrdinalIgnoreCase))
+                            if (reader.TryGetField("pre installed s/w", out string preInstalledSW) &&
+                                !preInstalledSW.Equals("NA", StringComparison.OrdinalIgnoreCase))
                             {
-                                Buffer.Append(" with ").Append(PreInstalledSW);
+                                buffer.Append(" with ").Append(preInstalledSW);
                             }
 
                             break;
                         }
                     case "amazonelasticache":
                         {
-                            reader.TryGetField("cache engine", out string CacheEngine);
-                            Buffer.Append("ElastiCache");
+                            reader.TryGetField("cache engine", out string cacheEngine);
+                            buffer.Append("ElastiCache");
 
-                            if (!String.IsNullOrEmpty(CacheEngine))
+                            if (!String.IsNullOrEmpty(cacheEngine))
                             {
-                                Buffer.Append(" ").Append(CacheEngine);
+                                buffer.Append(" ").Append(cacheEngine);
                             }
 
                             break;
                         }
                     case "amazondynamodb":
                         {
-                            reader.TryGetField("group", out string Group);
+                            reader.TryGetField("group", out string group);
 
-                            if (!String.IsNullOrEmpty(Group))
+                            if (!String.IsNullOrEmpty(group))
                             {
-                                Buffer.Append(Group);
+                                buffer.Append(group);
                             }
                             else
                             {
-                                Buffer.Append("Amazon DynamoDB");
+                                buffer.Append("Amazon DynamoDB");
                             }
 
                             break;
                         }
                     case "amazonredshift":
                         {
-                            reader.TryGetField("usage family", out string UsageFamily);
+                            reader.TryGetField("usage family", out string usageFamily);
 
-                            if (!String.IsNullOrEmpty(UsageFamily))
+                            if (!String.IsNullOrEmpty(usageFamily))
                             {
-                                Buffer.Append(UsageFamily);
+                                buffer.Append(usageFamily);
                             }
                             else
                             {
-                                Buffer.Append("Amazon Redshift");
+                                buffer.Append("Amazon Redshift");
                             }
 
+                            break;
+                        }
+                    case "amazones":
+                        {
+                            buffer.Append("Amazon Elasticsearch");
                             break;
                         }
                     default:
                         {
-                            Buffer.Append("UNKNOWN SERVICE ").Append(ServiceCode);
+                            buffer.Append("UNKNOWN SERVICE ").Append(serviceCode);
                             break;
                         }
                 }
 
-                return Buffer.ToString();
+                return buffer.ToString();
             }
             else
             {

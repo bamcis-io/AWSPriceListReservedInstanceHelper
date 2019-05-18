@@ -279,21 +279,31 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         /// <returns></returns>
         public static IEnumerable<ReservedInstancePricingTerm> Build(IGrouping<string, PricingTerm> commonSkus, Product product)
         {
-            PricingTerm OnDemand = commonSkus.FirstOrDefault(x => x.TermAttributes.PurchaseOption == PurchaseOption.ON_DEMAND);
-
-            if (OnDemand == null)
+            if (commonSkus == null)
             {
-                throw new KeyNotFoundException($"An on demand price data term was not found for sku: {commonSkus.Key}.");
+                throw new ArgumentNullException("commonSkus");
             }
 
-            IEnumerable<PricingTerm> ReservedTerms = commonSkus.Where(x => x.TermAttributes.PurchaseOption != PurchaseOption.ON_DEMAND);
+            if (product == null)
+            {
+                throw new ArgumentNullException("product");
+            }
 
-            if (!ReservedTerms.Any())
+            PricingTerm onDemand = commonSkus.FirstOrDefault(x => x.TermAttributes.PurchaseOption == PurchaseOption.ON_DEMAND);
+
+            if (onDemand == null)
+            {
+                throw new KeyNotFoundException($"{product.ProductFamily} - An on demand price data term was not found for sku: {commonSkus.Key}.");
+            }
+
+            IEnumerable<PricingTerm> reservedTerms = commonSkus.Where(x => x.TermAttributes.PurchaseOption != PurchaseOption.ON_DEMAND);
+
+            if (!reservedTerms.Any())
             {
                 return Enumerable.Empty<ReservedInstancePricingTerm>();
             }
 
-            return Build(product, OnDemand, ReservedTerms);
+            return Build(product, onDemand, reservedTerms);
         }
 
         /// <summary>
@@ -303,14 +313,24 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         /// <returns></returns>
         public static IEnumerable<ReservedInstancePricingTerm> BuildFromCsv(IGrouping<string, CsvRowItem> commonSkus)
         {
-            if (commonSkus != null)
+            return BuildFromCsv(new KeyValuePair<string, List<CsvRowItem>>(commonSkus.Key, commonSkus.ToList()));
+        }
+
+        /// <summary>
+        /// Creates a consolidated pricing term from price list csv rows that share a common sku
+        /// </summary>
+        /// <param name="commonSkus"></param>
+        /// <returns></returns>
+        public static IEnumerable<ReservedInstancePricingTerm> BuildFromCsv(KeyValuePair<string, List<CsvRowItem>> commonSkus)
+        {
+            if (commonSkus.Value != null)
             {
                 // This probably needs a better check for whether a csv row item represents on demand
                 // free tier charges.
                 // Amazon DynamoDB - HBHVWY47CM => Free tier
                 // EC2, Redshift, RDS, ElastiCache do not include free tier charge dimensions in price
                 // list file as of 9/25/2018
-                CsvRowItem onDemandRow = commonSkus.FirstOrDefault(x => x.PurchaseOption == PurchaseOption.ON_DEMAND && !x.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
+                CsvRowItem onDemandRow = commonSkus.Value.FirstOrDefault(x => x.PurchaseOption == PurchaseOption.ON_DEMAND && !x.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
                 double onDemandCost = -1;
 
                 if (onDemandRow == null)
@@ -322,7 +342,10 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                     onDemandCost = onDemandRow.PricePerUnit;
                 }
 
-                foreach (IGrouping<string, CsvRowItem> group in commonSkus.Where(x => x.PurchaseOption != PurchaseOption.ON_DEMAND).GroupBy(x => x.Key))
+                // Group based on key because there will be 2 items for 
+                // each "key" in the csv, one line item for the recurring
+                // and one for the upfront fee
+                foreach (IGrouping<string, CsvRowItem> group in commonSkus.Value.Where(x => x.PurchaseOption != PurchaseOption.ON_DEMAND).GroupBy(x => x.Key))
                 {
                     CsvRowItem upfront = group.FirstOrDefault(x => x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
 
@@ -410,79 +433,79 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                 throw new ArgumentException("You must supply at least 1 reserved term.");
             }
 
-            double OnDemandCost = -1;
+            double onDemandCost = -1;
 
             // Get the on demand hourly cost
             // DynamoDB has free tier price dimensions in the same on demand object, so make 
             // sure we pick the first that does not have free tier in the description
-            KeyValuePair<string, PriceDimension> Dimension = ondemand.PriceDimensions.FirstOrDefault(x => !x.Value.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
+            KeyValuePair<string, PriceDimension> dimension = ondemand.PriceDimensions.FirstOrDefault(x => !x.Value.Description.Contains(FREE_TIER, StringComparison.OrdinalIgnoreCase));
 
-            if (Dimension.Value == null)
+            if (dimension.Value == null)
             {
-                OnDemandCost = 0;
+                onDemandCost = 0;
             }
-            else if (!Double.TryParse(Dimension.Value.PricePerUnit.First().Value, out OnDemandCost))
+            else if (!Double.TryParse(dimension.Value.PricePerUnit.First().Value, out onDemandCost))
             {
-                throw new FormatException($"Could not parse the on demand price {Dimension.Value.PricePerUnit.First().Value} for sku: {product.Sku}.");
+                throw new FormatException($"Could not parse the on demand price {dimension.Value.PricePerUnit.First().Value} for sku: {product.Sku}.");
             }
 
-            string Platform = GetPlatform(product);
-            string Region = RegionMapper.GetRegionFromUsageType(product.Attributes.GetValueOrDefault("usagetype"));
+            string platform = GetPlatform(product);
+            string region = RegionMapper.GetRegionFromUsageType(product.Attributes.GetValueOrDefault("usagetype"));
 
             // Only EC2 has tenancy
-            if (!product.Attributes.TryGetValue("tenancy", out string Tenancy))
+            if (!product.Attributes.TryGetValue("tenancy", out string tenancy))
             {
-                Tenancy = "Shared";
+                tenancy = "Shared";
             }
 
             // Each pricing term will have the price dimensions for the upfront and recurring costs
-            foreach (PricingTerm Term in reservedterms)
+            foreach (PricingTerm term in reservedterms)
             {
-                PriceDimension Upfront = Term.PriceDimensions
+                PriceDimension upfront = term.PriceDimensions
                     .Select(x => x.Value)
                     .FirstOrDefault(x => !String.IsNullOrEmpty(x.Description) && x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
 
-                PriceDimension Recurring = Term.PriceDimensions
+                PriceDimension recurring = term.PriceDimensions
                     .Select(x => x.Value)
                     .FirstOrDefault(x => !String.IsNullOrEmpty(x.Description) && !x.Description.Equals("upfront fee", StringComparison.OrdinalIgnoreCase));
 
-                double HourlyRecurring = 0;
+                double hourlyRecurring = 0;
 
                 // Only check for recurring, since some may have no upfront
-                if (Recurring == null)
+                if (recurring == null)
                 {
                     // This should never happen
-                    throw new KeyNotFoundException($"The pricing term in {product.Attributes.GetValueOrDefault("servicecode")} for sku {Term.Sku} and offer term code {Term.OfferTermCode} did not contain a price dimension for hourly usage charges.");
+                    throw new KeyNotFoundException($"The pricing term in {product.Attributes.GetValueOrDefault("servicecode")} for sku {term.Sku} and offer term code {term.OfferTermCode} did not contain a price dimension for hourly usage charges.");
                 }
                 else
                 {
                     // Parse out the rate
-                    if (!Double.TryParse(Recurring.PricePerUnit.First().Value, out HourlyRecurring))
+                    if (!Double.TryParse(recurring.PricePerUnit.First().Value, out hourlyRecurring))
                     {
-                        throw new FormatException($"Could not parse the recurring price per unit of {Recurring.PricePerUnit.First().Value} for sku {Term.Sku}, offer term code {Term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
+                        throw new FormatException($"Could not parse the recurring price per unit of {recurring.PricePerUnit.First().Value} for sku {term.Sku}, offer term code {term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
                     }
                 }
 
-                double UpfrontFee = 0;
+                double upfrontFee = 0;
 
-                if (Upfront != null)
+                if (upfront != null)
                 {
                     // Parse out upfront fee
-                    if (!Double.TryParse(Upfront.PricePerUnit.First().Value, out UpfrontFee))
+                    if (!Double.TryParse(upfront.PricePerUnit.First().Value, out upfrontFee))
                     {
-                        throw new FormatException($"Could not parse the upfront cost of {Upfront.PricePerUnit.First().Value} for sku {Term.Sku}, offer term code {Term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
+                        throw new FormatException($"Could not parse the upfront cost of {upfront.PricePerUnit.First().Value} for sku {term.Sku}, offer term code {term.OfferTermCode}, in service {product.Attributes.GetValueOrDefault("servicecode")}.");
                     }
                 }
 
-                string OperatingSystem = String.Empty;
+                string operatingSystem = String.Empty;
 
                 if (product.Attributes.ContainsKey("operatingsystem"))
                 {
-                    OperatingSystem = product.Attributes.GetValueOrDefault("operatingsystem");
+                    operatingSystem = product.Attributes.GetValueOrDefault("operatingsystem");
                 }
                 else
                 {
-                    OperatingSystem = Platform;
+                    operatingSystem = platform;
                 }
 
                 int vCPU = 0;
@@ -492,48 +515,48 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                     Int32.TryParse(product.Attributes.GetValueOrDefault("vcpu"), out vCPU);
                 }
 
-                double Memory = 0;
+                double memory = 0;
 
                 if (product.Attributes.ContainsKey("memory"))
                 {
-                    string MemoryString = product.Attributes.GetValueOrDefault("memory").Replace(",", "");
+                    string memoryString = product.Attributes.GetValueOrDefault("memory").Replace(",", "");
 
-                    Match MemoryMatch = _MemoryRegex.Match(MemoryString);
+                    Match memoryMatch = _MemoryRegex.Match(memoryString);
 
-                    if (MemoryMatch.Success)
+                    if (memoryMatch.Success)
                     {
-                        Double.TryParse(MemoryMatch.Groups[1].Value, out Memory);
+                        Double.TryParse(memoryMatch.Groups[1].Value, out memory);
                     }
                 }
 
-                string UsageType = product.Attributes.GetValueOrDefault("usagetype");
+                string usageType = product.Attributes.GetValueOrDefault("usagetype");
 
-                string InstanceType = UsageType;
+                string instanceType = usageType;
 
                 if (product.Attributes.ContainsKey("instancetype"))
                 {
-                    InstanceType = product.Attributes.GetValueOrDefault("usagetype");
+                    instanceType = product.Attributes.GetValueOrDefault("usagetype");
                 }
 
                 yield return new ReservedInstancePricingTerm(
-                    Term.Sku,
-                    Term.OfferTermCode,
+                    term.Sku,
+                    term.OfferTermCode,
                     product.Attributes.GetValueOrDefault("servicecode"),
-                    Platform,
-                    OperatingSystem,
-                    InstanceType,
+                    platform,
+                    operatingSystem,
+                    instanceType,
                     product.Attributes.GetValueOrDefault("operation"),
-                    UsageType,
-                    Tenancy,
-                    Region,
+                    usageType,
+                    tenancy,
+                    region,
                     vCPU,
-                    Memory,
-                    OnDemandCost,
-                    HourlyRecurring,
-                    UpfrontFee,
-                    Term.TermAttributes.LeaseContractLength,
-                    Term.TermAttributes.PurchaseOption,
-                    Term.TermAttributes.OfferingClass,
+                    memory,
+                    onDemandCost,
+                    hourlyRecurring,
+                    upfrontFee,
+                    term.TermAttributes.LeaseContractLength,
+                    term.TermAttributes.PurchaseOption,
+                    term.TermAttributes.OfferingClass,
                     AWSPriceListApi.Serde.Term.RESERVED
                 );
             }
@@ -550,44 +573,44 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
         /// <returns>The platform string or UNKNOWN if it couldn't be determined</returns>
         private static string GetPlatform(Product product)
         {
-            StringBuilder Buffer = new StringBuilder();
-            IDictionary<string, string> Attributes = product.Attributes.ToDictionary(x => x.Key.ToLower(), x => x.Value, StringComparer.OrdinalIgnoreCase);
+            StringBuilder buffer = new StringBuilder();
+            IDictionary<string, string> attributes = product.Attributes.ToDictionary(x => x.Key.ToLower(), x => x.Value, StringComparer.OrdinalIgnoreCase);
 
-            if (Attributes.KeyExistsAndValueNotNullOrEmpty("servicecode"))
+            if (attributes.KeyExistsAndValueNotNullOrEmpty("servicecode"))
             {
-                Attributes.TryGetValue("servicecode", out string ServiceCode);
-                Attributes.TryGetValue("licensemodel", out string LicenseModel);
+                attributes.TryGetValue("servicecode", out string serviceCode);
+                attributes.TryGetValue("licensemodel", out string licenseModel);
 
-                switch (ServiceCode.ToLower())
+                switch (serviceCode.ToLower())
                 {
                     case "amazonrds":
                         {
-                            Attributes.TryGetValue("databaseengine", out string DatabaseEngine);
-                            Attributes.TryGetValue("databaseedition", out string DatabaseEdition);
+                            attributes.TryGetValue("databaseengine", out string databaseEngine);
+                            attributes.TryGetValue("databaseedition", out string databaseEdition);
 
-                            Buffer.Append("RDS ").Append(DatabaseEngine);
+                            buffer.Append("RDS ").Append(databaseEngine);
 
-                            switch (DatabaseEngine.ToLower())
+                            switch (databaseEngine.ToLower())
                             {
                                 case "sql server":
                                     {
-                                        if (!String.IsNullOrEmpty(DatabaseEdition))
+                                        if (!String.IsNullOrEmpty(databaseEdition))
                                         {
-                                            switch (DatabaseEdition.ToLower())
+                                            switch (databaseEdition.ToLower())
                                             {
                                                 case "enterprise":
                                                     {
-                                                        Buffer.Append(" EE");
+                                                        buffer.Append(" EE");
                                                         break;
                                                     }
                                                 case "standard":
                                                     {
-                                                        Buffer.Append(" SE");
+                                                        buffer.Append(" SE");
                                                         break;
                                                     }
                                                 case "web":
                                                     {
-                                                        Buffer.Append(" Web");
+                                                        buffer.Append(" Web");
                                                         break;
                                                     }
                                             }
@@ -596,28 +619,28 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                                     }
                                 case "oracle":
                                     {
-                                        if (!String.IsNullOrEmpty(DatabaseEdition))
+                                        if (!String.IsNullOrEmpty(databaseEdition))
                                         {
-                                            switch (DatabaseEdition.ToLower())
+                                            switch (databaseEdition.ToLower())
                                             {
                                                 case "enterprise":
                                                     {
-                                                        Buffer.Append(" EE");
+                                                        buffer.Append(" EE");
                                                         break;
                                                     }
                                                 case "standard":
                                                     {
-                                                        Buffer.Append(" SE");
+                                                        buffer.Append(" SE");
                                                         break;
                                                     }
                                                 case "standard one":
                                                     {
-                                                        Buffer.Append(" SE1");
+                                                        buffer.Append(" SE1");
                                                         break;
                                                     }
                                                 case "standard two":
                                                     {
-                                                        Buffer.Append(" SE2");
+                                                        buffer.Append(" SE2");
                                                         break;
                                                     }
                                             }
@@ -627,11 +650,11 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                                     }
                             }
 
-                            switch (LicenseModel.ToLower())
+                            switch (licenseModel.ToLower())
                             {
                                 case "bring your own license":
                                     {
-                                        Buffer.Append(" BYOL");
+                                        buffer.Append(" BYOL");
                                         break;
                                     }
 
@@ -643,24 +666,24 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                                     }
                             }
 
-                            if (Attributes.TryGetValue("deploymentoption", out string DeploymentOption) &&
-                                DeploymentOption.Equals("Multi-AZ", StringComparison.OrdinalIgnoreCase))
+                            if (attributes.TryGetValue("deploymentoption", out string deploymentOption) &&
+                                deploymentOption.Equals("Multi-AZ", StringComparison.OrdinalIgnoreCase))
                             {
-                                Buffer.Append(" Multi-AZ");
+                                buffer.Append(" Multi-AZ");
                             }
 
                             break;
                         }
                     case "amazonec2":
                         {
-                            Attributes.TryGetValue("operatingsystem", out string OperatingSystem);
-                            Buffer.Append(OperatingSystem);
+                            attributes.TryGetValue("operatingsystem", out string OperatingSystem);
+                            buffer.Append(OperatingSystem);
 
-                            switch (LicenseModel.ToLower())
+                            switch (licenseModel.ToLower())
                             {
                                 case "bring your own license":
                                     {
-                                        Buffer.Append(" BYOL");
+                                        buffer.Append(" BYOL");
                                         break;
                                     }
 
@@ -672,67 +695,67 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                                     }
                             }
 
-                            if (Attributes.TryGetValue("preinstalledsw", out string PreInstalledSW) &&
-                                !PreInstalledSW.Equals("NA", StringComparison.OrdinalIgnoreCase))
+                            if (attributes.TryGetValue("preinstalledsw", out string preInstalledSW) &&
+                                !preInstalledSW.Equals("NA", StringComparison.OrdinalIgnoreCase))
                             {
-                                Buffer.Append(" with ").Append(PreInstalledSW);
+                                buffer.Append(" with ").Append(preInstalledSW);
                             }
 
                             break;
                         }
                     case "amazonelasticache":
                         {                            
-                            Buffer.Append("ElastiCache");
+                            buffer.Append("ElastiCache");
 
-                            if (Attributes.TryGetValue("cacheengine", out string CacheEngine) && !String.IsNullOrEmpty(CacheEngine))
+                            if (attributes.TryGetValue("cacheengine", out string cacheEngine) && !String.IsNullOrEmpty(cacheEngine))
                             {
-                                Buffer.Append(" ").Append(CacheEngine);
+                                buffer.Append(" ").Append(cacheEngine);
                             }
 
                             break;
                         }
                     case "amazones":
                         {
-                            Buffer.Append("Amazon Elasticsearch");
+                            buffer.Append("Amazon Elasticsearch");
                             break;
                         }
                     case "amazondynamodb":
                         {
                            
-                            if (Attributes.TryGetValue("group", out string Group) &&
-                             !String.IsNullOrEmpty(Group))
+                            if (attributes.TryGetValue("group", out string group) &&
+                             !String.IsNullOrEmpty(group))
                             {
-                                Buffer.Append(Group);
+                                buffer.Append(group);
                             }
                             else
                             {
-                                Buffer.Append("Amazon DynamoDB");
+                                buffer.Append("Amazon DynamoDB");
                             }
 
                             break;
                         }
                     case "amazonredshift":
                         {
-                            if (Attributes.TryGetValue("usageFamily", out string UsageFamily) && 
-                                !String.IsNullOrEmpty(UsageFamily))
+                            if (attributes.TryGetValue("usageFamily", out string usageFamily) && 
+                                !String.IsNullOrEmpty(usageFamily))
                             {
-                                Buffer.Append(UsageFamily);
+                                buffer.Append(usageFamily);
                             }
                             else
                             {
-                                Buffer.Append("Amazon Redshift");
+                                buffer.Append("Amazon Redshift");
                             }
 
                             break;
                         }
                     default:
                         {
-                            Buffer.Append("UNKNOWN SERVICE ").Append(ServiceCode);
+                            buffer.Append("UNKNOWN SERVICE ").Append(serviceCode);
                             break;
                         }
                 }
 
-                return Buffer.ToString();
+                return buffer.ToString();
             }
             else
             {
