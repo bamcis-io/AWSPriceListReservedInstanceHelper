@@ -335,7 +335,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
 
                 if (onDemandRow == null)
                 {
-                    throw new KeyNotFoundException($"An on demand price data term was not found for sku: {commonSkus.Key}.");
+                    throw new KeyNotFoundException($"{(commonSkus.Value.First() != null ? commonSkus.Value.First().ServiceCode : "UNKNOWN")} - An on demand price data term was not found for sku: {commonSkus.Key}.");
                 }
                 else
                 {
