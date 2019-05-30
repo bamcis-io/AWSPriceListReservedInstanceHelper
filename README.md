@@ -1,8 +1,6 @@
 # BAMCIS AWS Price List Reserved Instance Helper
 
-This application parses the price list API content for Amazon EC2, RDS, and ElastiCache. It retrieves the pricing terms
-that are relevant to Reserved Instance purchases for each of those services and stores them in S3 so that they can be 
-queried through tools like Athena or EMR.
+This application parses the price list API content for Amazon EC2, RDS, ElastiCache, Elasticsearch, Redshift, and DynamoDB. It retrieves the pricing terms that are relevant to Reserved Instance purchases for each of those services and stores them in S3 so that they can be queried through tools like Athena or EMR.
 
 ## Table of Contents
 - [Usage](#usage)
@@ -11,13 +9,9 @@ queried through tools like Athena or EMR.
 
 ## Usage
 
-The application consists of 2 functions. The first function is triggered by the scheduled event. It then launches 3 separate functions, one 
-for each service to ensure there are no timeout issues when trying to parse the price list files.
+The application consists of 2 functions. The first function is triggered by the SNS notification that the price list has changed (or the summary daily notification). It then launches 6 concurrent executions of the second function, one for each service to ensure there are no timeout or memory issues when trying to parse the price list files.
 
-Deploy the application into any account specifying the frequency you want it to run. The function will setup the S3 bucket
-as well where the results will be stored. For each SKU, i.e. a unique reservable item type (a combination of instance type, platform, region,
-and tenancy), there will be line items for all of the reserved instance purchase options for that unique item type. For example, you'll have
-a row for 1 year all upfront standard and a row for 3 year no upfront convertible, etc. 
+Deploy the application into any account specifying the frequency you want it to run. The function will setup the S3 bucket as well where the results will be stored. For each SKU, i.e. a unique reservable item type (a combination of instance type, platform, region, and tenancy), there will be line items for all of the reserved instance purchase options for that unique item type. For example, you'll have a row for 1 year all upfront standard and a row for 3 year no upfront convertible, etc. 
 
 Here's some example data from a simple Athena query:
 
@@ -36,26 +30,19 @@ Here's some example data from a simple Athena query:
 | 223BX6UNNB3JE9ET | 38NPMPTW36    | SUSE     | Shared  | RunInstances:000g | USW2-BoxUsage:r4.xlarge | us-west-2 | AmazonEC2 | r4.xlarge    | SUSE            | 0.066                | 0.366              | 0.362269298         | 1750       | 3         | PARTIAL_UPFRONT | STANDARD      | RESERVED | 3::PARTIAL_UPFRONT::STANDARD    | 3484.48              | 9618.48             | 6134        | 63.773         | 4    | 30.5   |
 | 223BX6UNNB3JE9ET | Z2E3P23VKM    | SUSE     | Shared  | RunInstances:000g | USW2-BoxUsage:r4.xlarge | us-west-2 | AmazonEC2 | r4.xlarge    | SUSE            | 0.1647               | 0.366              | 0.45                | 0          | 3         | NO_UPFRONT      | CONVERTIBLE   | RESERVED | 3::NO_UPFRONT::CONVERTIBLE      | 4328.316             | 9618.48             | 5290.164    | 55             | 4    | 30.5   |
 
-Additional data has been added to each row to easily identify the breakeven utilization percentage where purchasing the RI is more cost
-effective than paying the on demand costs as well as the percent savings and the standard on-demand hourly cost. This gives a robust way
-to quickly view and analyze current RI pricing as well as combine this data with actual usage data from AWS Cost and Usage Reports (aka billing
-files) to generate Reserved Instance purchase recommendations.
+Additional data has been added to each row to easily identify the breakeven utilization percentage where purchasing the RI is more cost effective than paying the on demand costs as well as the percent savings and the standard on-demand hourly cost. This gives a robust way to quickly view and analyze current RI pricing as well as combine this data with actual usage data from AWS Cost and Usage Reports (aka billing files) to generate Reserved Instance purchase recommendations.
 
-The delimiter used in the results is the `|` symbol to help alleviate issues with commas being used in columns. You can specify
-a different delimiter by providing an environment variable, `DELIMITER`, to the function. The results bucket is also provided to the function
-as an environment variable, `BUCKET`. The secondary function is identified to the first function as an environment variable `FunctionName`. Lastly,
-this format of the price list data that the second lambda function pulls down is specified by the `PRICELIST_FORMAT` environment variable. If it's not
-set or doesn't match an expected value, `csv` is used.
+The delimiter used in the results is the `|` symbol to help alleviate issues with commas being used in columns. You can specify a different delimiter by providing an environment variable, `DELIMITER`, to the function. The results bucket is also provided to the function as an environment variable, `BUCKET`. The secondary function is identified to the first function as an environment variable `FunctionName`. Lastly, this format of the price list data that the second lambda function pulls down is specified by the `PRICELIST_FORMAT` environment variable. If it's not set or doesn't match an expected value, `csv` is used.
 
 ## Notifications
-Both Lambda functions accept an environment variable `SNS` that is an ARN to an SNS topic. When an exception is encountered during processing that
-would normally end execution, an SNS notification can be sent to the specified topic. All other exceptions, warnings, and info are logged to CloudWatch
-Logs. You could also pair these functions with a function that sent an SNS message on a `PutObject` S3 action to notify you that new RI pricing data
-files have been delivered.
+Both Lambda functions accept an environment variable `SNS` that is an ARN to an SNS topic. When an exception is encountered during processing that would normally end execution, an SNS notification can be sent to the specified topic. All other exceptions, warnings, and info are logged to CloudWatch Logs. You could also pair these functions with a function that sent an SNS message on a `PutObject` S3 action to notify you that new RI pricing data files have been delivered.
 
-Additional monitoring has been added in version 1.3.0. CloudWatch Alarms now monitor failed Lambda function invocations and deliver SNS notifications when they occur. A separate CloudWatch Alarm monitors for at least 1 invocation of the Distributor function and 5 invocations of the Worker function to ensure the invocations are actually occuring. If you have the frequency scheduled for more than 1 day, expect to see SNS messages concerning the invocation frequency. Lastly, Lambda Dead Letter Queues (DLQ) have been added for each function (where the request to the function gets sent after 3 failed execution attempts). When the DLQ exceeds 0 messages, a CloudWatch Alarm is triggered and sends an SNS notification. It is up to the user to decide what to do with the messages in the DLQ.
+Additional monitoring has been added in version 1.3.0. CloudWatch Alarms now monitor failed Lambda function invocations and deliver SNS notifications when they occur. A separate CloudWatch Alarm monitors for at least 1 invocation of the Distributor function and 6 invocations of the Worker function to ensure the invocations are actually occuring. If you have the frequency scheduled for more than 1 day, expect to see SNS messages concerning the invocation frequency. Lastly, Lambda Dead Letter Queues (DLQ) have been added for each function (where the request to the function gets sent after 3 failed execution attempts). When the DLQ exceeds 0 messages, a CloudWatch Alarm is triggered and sends an SNS notification. It is up to the user to decide what to do with the messages in the DLQ.
 
 ## Revision History
+
+### 2.1.2
+Using new AWS API Price List client version.
 
 ### 2.1.1
 Bug fixes, memory optimization, and added unit tests.

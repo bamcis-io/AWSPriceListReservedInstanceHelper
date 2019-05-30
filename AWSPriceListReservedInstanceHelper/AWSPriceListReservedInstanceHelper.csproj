@@ -8,12 +8,12 @@
     <Company>bamcis.io</Company>
     <Copyright>BAMCIS</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <Version>2.1.1</Version>
+    <Version>2.1.2</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</RepositoryUrl>
     <PackageProjectUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</PackageProjectUrl>
     <PackageLicenseUrl></PackageLicenseUrl>
-    <PackageReleaseNotes>Switched the flush order for the stream writers and added awaits.</PackageReleaseNotes>
+    <PackageReleaseNotes>Using new AWS Price List API client.</PackageReleaseNotes>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
 
@@ -21,10 +21,10 @@
     <PackageReference Include="Amazon.Lambda.Core" Version="1.1.0" />
     <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="1.5.0" />
     <PackageReference Include="Amazon.Lambda.SNSEvents" Version="1.1.0" />
-    <PackageReference Include="AWSPriceListApi" Version="3.0.0" />
-    <PackageReference Include="AWSSDK.Lambda" Version="3.3.102.2" />
-    <PackageReference Include="AWSSDK.S3" Version="3.3.102.1" />
-    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.3.101.9" />
+    <PackageReference Include="AWSPriceListApi" Version="4.0.0" />
+    <PackageReference Include="AWSSDK.Lambda" Version="3.3.102.8" />
+    <PackageReference Include="AWSSDK.S3" Version="3.3.102.7" />
+    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.3.101.15" />
     <PackageReference Include="BAMCIS.AWSLambda.Common" Version="2.0.1" />
     <PackageReference Include="CsvHelper" Version="12.1.2" />
   </ItemGroup>
