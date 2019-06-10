@@ -697,7 +697,7 @@
 				],
 				"Statistic" : "Sum",
 				"EvaluationPeriods" : "1",
-				"Threshold" : "5",
+				"Threshold" : "6",
 				"Period" : "86400",
 				"Unit" : "Count",
 				"TreatMissingData" : "notBreaching"
