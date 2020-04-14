@@ -84,6 +84,15 @@
 			"Default" : 600,
 			"ConstraintDescription" : "The timeout must be between 60 (1 minute) and 900 (15 minutes)."
 		},
+        "ComputeEC2" : {
+            "Type" : "String",
+            "Description" : "Specify whether to compute EC2 reserved instances. Not necessarily valuable anymore with Savings Plans.",
+            "Default" : "false",
+            "AllowedValues" : [
+                "true",
+                "false"
+            ]
+        },
 
         "OrganizationTag"    : {
             "Description" : "The organization this account is associated with",
@@ -575,7 +584,10 @@
 						},
 						"SNS" : {
 							"Ref" : "SNSTopic"
-						}
+						},
+                        "ComputeEC2" : {
+                            "Ref" : "ComputeEC2"
+                        }
 					}
 				},
 				"DeadLetterQueue" : {

@@ -41,6 +41,9 @@ Additional monitoring has been added in version 1.3.0. CloudWatch Alarms now mon
 
 ## Revision History
 
+### 2.1.3
+Updated to latest price list client to fix OOM errors when processing EC2 offer files.
+
 ### 2.1.2
 Using new AWS API Price List client version.
 

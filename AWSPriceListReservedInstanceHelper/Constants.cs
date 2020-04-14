@@ -7,5 +7,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         public static IReadOnlyCollection<string> ReservableServices = new string[] { "AmazonEC2", "AmazonRDS", "AmazonElastiCache", "AmazonRedshift", "AmazonDynamoDB", "AmazonES" };
 
         public static IReadOnlyCollection<string> InstanceBasedReservableServices = new string[] { "AmazonEC2", "AmazonRDS", "AmazonElastiCache", "AmazonRedshift", "AmazonES" };
+
+        public const string AmazonEC2 = "AmazonEC2";
     }
 }

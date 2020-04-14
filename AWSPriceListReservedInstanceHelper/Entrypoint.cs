@@ -7,14 +7,14 @@ using Amazon.S3.Transfer;
 using Amazon.SimpleNotificationService;
 using Amazon.SimpleNotificationService.Model;
 using BAMCIS.AWSLambda.Common;
-using BAMCIS.AWSLambda.Common.Events;
 using BAMCIS.AWSPriceListApi;
-using BAMCIS.AWSPriceListApi.Serde;
+using BAMCIS.AWSPriceListApi.Model;
 using BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models;
 using CsvHelper;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -102,6 +102,22 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 
             List<Task<InvokeResponse>> response = new List<Task<InvokeResponse>>();
 
+            IEnumerable<string> services = Constants.ReservableServices;
+
+            // Since Amazon EC2 has savings plans now, calculating RIs doesn't really add much
+            // value, so only do them if they're specifically opted in
+            if (Boolean.TryParse(System.Environment.GetEnvironmentVariable("ComputeEC2"), out bool doEC2))
+            {
+                if (!doEC2)
+                {
+                    services = services.Where(x => x != Constants.AmazonEC2);
+                }
+            }
+            else
+            {
+                services = services.Where(x => x != Constants.AmazonEC2);
+            }
+
             foreach (string service in Constants.ReservableServices)
             {
                 try
@@ -185,7 +201,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 disposables.Add(streamWriter);
 
                 // The csv writer to write the price data objects
-                CsvWriter csvWriter = new CsvWriter(streamWriter);
+                CsvWriter csvWriter = new CsvWriter(streamWriter, CultureInfo.InvariantCulture);
                 csvWriter.Configuration.Delimiter = delimiter;
                 disposables.Add(csvWriter);
 
@@ -208,7 +224,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 context.LogInfo("Parsing price list data.");
 
                 // Fill the output stream
-                await this.FillOutputStreamWriter(response.ProductInfo, csvWriter, productRequest.Format);
+                await this.FillOutputStreamWriter(response.Content, csvWriter, productRequest.Format);
 
                 // Make sure everything is written out since we don't dispose
                 // of these till later, if the textwriter isn't flushed
@@ -216,7 +232,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 csvWriter.Flush();
                 streamWriter.Flush();
 
-                response.ProductInfo.Dispose();
+                response.Dispose();
                 response = null;
 
                 await UploadCsvToS3(memoryStreamOut, bucket, service, context);
@@ -331,7 +347,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             {
                 using (StreamReader streamReader = new StreamReader(csv))
                 {
-                    using (CsvReader reader = new CsvReader(streamReader))
+                    using (CsvReader reader = new CsvReader(streamReader, CultureInfo.InvariantCulture))
                     {
                         // Make all of the headers lowercase so we don't have to worry about
                         // case sensitivity later
@@ -397,11 +413,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
         private async Task GetFromJson(Stream json, CsvWriter writer)
         {
             json.Position = 0;
-            ProductOffer offer;
-            using (StreamReader reader = new StreamReader(json))
-            {
-                offer = ProductOffer.FromJson(reader.ReadToEnd());
-            }
+            ProductOffer offer = ProductOffer.FromJsonStream(json);
 
             /*  
              *  Old implementation, don't need such a complex grouping, just iterate

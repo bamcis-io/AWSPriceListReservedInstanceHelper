@@ -1,4 +1,4 @@
-﻿using BAMCIS.AWSPriceListApi.Serde;
+﻿using BAMCIS.AWSPriceListApi.Model;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -557,7 +557,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models
                     term.TermAttributes.LeaseContractLength,
                     term.TermAttributes.PurchaseOption,
                     term.TermAttributes.OfferingClass,
-                    AWSPriceListApi.Serde.Term.RESERVED
+                    AWSPriceListApi.Model.Term.RESERVED
                 );
             }
         }

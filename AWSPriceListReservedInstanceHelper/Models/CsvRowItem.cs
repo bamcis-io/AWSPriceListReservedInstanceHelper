@@ -1,4 +1,5 @@
-﻿using BAMCIS.AWSPriceListApi.Serde;
+﻿using BAMCIS.AWSPriceListApi.Model;
+using BAMCIS.AWSPriceListApi.Serde;
 using CsvHelper;
 using System;
 using System.Linq;

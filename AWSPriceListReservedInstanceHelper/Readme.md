@@ -47,6 +47,9 @@ as an environment variable, `BUCKET`. The secondary function is identified to th
 this format of the price list data that the second lambda function pulls down is specified by the `PRICELIST_FORMAT` environment variable. If it's not
 set or doesn't match an expected value, `csv` is used.
 
+### Enable EC2 Computation
+Specify the `ComputeEC2` parameter as `true` to enable computing EC2 RIs, otherwise they will be skipped.
+
 ## Notifications
 Both Lambda functions accept an environment variable `SNS` that is an ARN to an SNS topic. When an exception is encountered during processing that
 would normally end execution, an SNS notification can be sent to the specified topic. All other exceptions, warnings, and info are logged to CloudWatch
@@ -56,6 +59,9 @@ files have been delivered.
 Additional monitoring has been added in version 1.3.0. CloudWatch Alarms now monitor failed Lambda function invocations and deliver SNS notifications when they occur. A separate CloudWatch Alarm monitors for at least 1 invocation of the Distributor function and 5 invocations of the Worker function to ensure the invocations are actually occuring. If you have the frequency scheduled for more than 1 day, expect to see SNS messages concerning the invocation frequency. Lastly, Lambda Dead Letter Queues (DLQ) have been added for each function (where the request to the function gets sent after 3 failed execution attempts). When the DLQ exceeds 0 messages, a CloudWatch Alarm is triggered and sends an SNS notification. It is up to the user to decide what to do with the messages in the DLQ.
 
 ## Revision History
+
+### 1.3.1
+Added an option to not compute EC2 reserved instances since they aren't needed anymore with savings plans and ODCRs.
 
 ### 1.3.0
 Added enhanced monitoring.
