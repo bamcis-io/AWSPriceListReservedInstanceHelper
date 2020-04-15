@@ -118,7 +118,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 services = services.Where(x => x != Constants.AmazonEC2);
             }
 
-            foreach (string service in Constants.ReservableServices)
+            foreach (string service in services)
             {
                 try
                 {
