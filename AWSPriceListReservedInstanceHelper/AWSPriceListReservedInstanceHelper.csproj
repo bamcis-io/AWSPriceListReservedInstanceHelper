@@ -8,15 +8,15 @@
     <Company>bamcis.io</Company>
     <Copyright>BAMCIS</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <Version>2.1.3</Version>
+    <Version>2.1.4</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</RepositoryUrl>
     <PackageProjectUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</PackageProjectUrl>
     <PackageLicenseUrl></PackageLicenseUrl>
-    <PackageReleaseNotes>Using new AWS Price List API client.</PackageReleaseNotes>
+    <PackageReleaseNotes>Updated region mapper.</PackageReleaseNotes>
     <PackageLicenseFile></PackageLicenseFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <AssemblyVersion>2.1.3.0</AssemblyVersion>
+    <AssemblyVersion>2.1.4.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
