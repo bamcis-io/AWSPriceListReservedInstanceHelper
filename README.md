@@ -41,6 +41,9 @@ Additional monitoring has been added in version 1.3.0. CloudWatch Alarms now mon
 
 ## Revision History
 
+### 2.1.5
+Updated `RegionMapper` with the new Cape Town region, af-south-1.
+
 ### 2.1.4
 Updated `RegionMapper`.
 

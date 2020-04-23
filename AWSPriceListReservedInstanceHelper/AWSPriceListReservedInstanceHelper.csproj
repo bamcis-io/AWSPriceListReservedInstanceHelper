@@ -8,7 +8,7 @@
     <Company>bamcis.io</Company>
     <Copyright>BAMCIS</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <Version>2.1.4</Version>
+    <Version>2.1.5</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</RepositoryUrl>
     <PackageProjectUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</PackageProjectUrl>
@@ -16,7 +16,7 @@
     <PackageReleaseNotes>Updated region mapper.</PackageReleaseNotes>
     <PackageLicenseFile></PackageLicenseFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <AssemblyVersion>2.1.4.0</AssemblyVersion>
+    <AssemblyVersion>2.1.5.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
