@@ -68,7 +68,6 @@
         }
     },
 
-
     "Conditions"               : {
         "InfiniteRetention" : {
             "Fn::Equals" : [
