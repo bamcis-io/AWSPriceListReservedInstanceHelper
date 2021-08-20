@@ -1,8 +1,11 @@
 version: 0.2
 phases:
   install:
+    runtime-versions:
+      dotnet: 3.1
     commands:
       - dotnet tool install -g Amazon.Lambda.Tools
+      - dotnet tool update -g Amazon.Lambda.Tools
 
   pre_build:
     commands:
