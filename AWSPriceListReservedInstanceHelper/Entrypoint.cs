@@ -11,6 +11,7 @@ using BAMCIS.AWSPriceListApi;
 using BAMCIS.AWSPriceListApi.Model;
 using BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Models;
 using CsvHelper;
+using CsvHelper.Configuration;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -201,8 +202,12 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 disposables.Add(streamWriter);
 
                 // The csv writer to write the price data objects
-                CsvWriter csvWriter = new CsvWriter(streamWriter, CultureInfo.InvariantCulture);
-                csvWriter.Configuration.Delimiter = delimiter;
+                var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+                {
+                    Delimiter = delimiter
+                };
+
+                CsvWriter csvWriter = new CsvWriter(streamWriter, config);
                 disposables.Add(csvWriter);
 
                 // Write the header to the csv
@@ -347,12 +352,15 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             {
                 using (StreamReader streamReader = new StreamReader(csv))
                 {
-                    using (CsvReader reader = new CsvReader(streamReader, CultureInfo.InvariantCulture))
+                    // Make all of the headers lowercase so we don't have to worry about
+                    // case sensitivity later
+                    var config = new CsvConfiguration(CultureInfo.InvariantCulture)
                     {
-                        // Make all of the headers lowercase so we don't have to worry about
-                        // case sensitivity later
-                        reader.Configuration.PrepareHeaderForMatch = (header, index) => header.ToLower();
+                        PrepareHeaderForMatch = args => args.Header.ToLower()
+                    };
 
+                    using (CsvReader reader = new CsvReader(streamReader, config))
+                    {                        
                         reader.Read(); // Advance to the next row, which is the header row
                         reader.ReadHeader(); // Read the headers
 

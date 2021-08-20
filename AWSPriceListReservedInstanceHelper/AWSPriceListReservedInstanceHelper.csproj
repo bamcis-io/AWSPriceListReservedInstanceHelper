@@ -1,14 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
     <RootNamespace>BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper</RootNamespace>
     <Authors>Michael Haken</Authors>
     <Company>bamcis.io</Company>
     <Copyright>BAMCIS</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <Version>2.1.5</Version>
+    <Version>2.1.6</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</RepositoryUrl>
     <PackageProjectUrl>https://github.com/bamcis-io/AWSPriceListReservedInstanceHelper</PackageProjectUrl>
@@ -16,19 +16,19 @@
     <PackageReleaseNotes>Updated region mapper.</PackageReleaseNotes>
     <PackageLicenseFile></PackageLicenseFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <AssemblyVersion>2.1.5.0</AssemblyVersion>
+    <AssemblyVersion>2.1.6.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Amazon.Lambda.Core" Version="1.1.0" />
-    <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="1.7.0" />
-    <PackageReference Include="Amazon.Lambda.SNSEvents" Version="1.1.0" />
+    <PackageReference Include="Amazon.Lambda.Core" Version="2.0.0" />
+    <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="2.0.0" />
+    <PackageReference Include="Amazon.Lambda.SNSEvents" Version="2.0.0" />
     <PackageReference Include="AWSPriceListApi" Version="5.0.0" />
-    <PackageReference Include="AWSSDK.Lambda" Version="3.3.109.6" />
-    <PackageReference Include="AWSSDK.S3" Version="3.3.110.50" />
-    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.3.101.148" />
+    <PackageReference Include="AWSSDK.Lambda" Version="3.7.3.2" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.1.25" />
+    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.7.2.24" />
     <PackageReference Include="BAMCIS.AWSLambda.Common" Version="2.0.1" />
-    <PackageReference Include="CsvHelper" Version="15.0.4" />
+    <PackageReference Include="CsvHelper" Version="27.1.1" />
   </ItemGroup>
 
   <ItemGroup>

@@ -514,7 +514,7 @@
             "Properties" : {
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::RunForServiceAsync",
 				"Description": "Downloads the price list file for a specified service and formats it for ingestion by Athena.",
-                "Runtime" : "dotnetcore2.1",
+                "Runtime" : "dotnetcore3.1",
                 "CodeUri" : "",
                 "MemorySize" : {
 					"Ref" : "WorkerMemory"
@@ -567,7 +567,7 @@
             "Properties" : {
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::LaunchWorkersAsync",
 				"Description": "Kicks of the AWS price list formatter worker functions.",
-                "Runtime" : "dotnetcore2.1",
+                "Runtime" : "dotnetcore3.1",
                 "CodeUri" : "",
                 "MemorySize" : 128,
                 "Timeout"    : 30,
