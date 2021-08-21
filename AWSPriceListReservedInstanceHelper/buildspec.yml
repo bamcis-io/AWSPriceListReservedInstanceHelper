@@ -3,9 +3,6 @@ phases:
   install:
     runtime-versions:
       dotnet: 3.1
-    commands:
-      - dotnet tool install -g Amazon.Lambda.Tools
-      - export PATH="$PATH:/root/.dotnet/tools"
 
   pre_build:
     commands:
@@ -13,14 +10,17 @@ phases:
       - cd AWSPriceListReservedInstanceHelper
       - dotnet clean
       - dotnet restore
+      - mkdir -p .aws-sam
+      - mkdir -p .aws-sam/output
       
   build:
     commands:
       - echo Build started on `date`
-      - dotnet lambda package-ci --configuration Release --framework netcoreapp3.1 --s3-bucket $BUCKET --s3-prefix "${PROJECT_NAME}/" --template AWSPriceListReservedInstanceHelper.template --output-template bin/Release/netcoreapp3.1/$PROJECT_NAME.template
+      - sam build --template-file AWSPriceListReservedInstanceHelper.template --region $AWS_REGION
+      - sam package --kms-key-id $CODEBUILD_KMS_KEY_ID --s3-bucket $BUCKET --s3-prefix "${PROJECT_NAME}/" --use-json --region $AWS_REGION --output-template-file .aws-sam/output/$PROJECT_NAME.template 
 
 artifacts:
   name: BuildOutput
   files:
-    - AWSPriceListReservedInstanceHelper/bin/Release/netcoreapp3.1/$PROJECT_NAME.template
+    - AWSPriceListReservedInstanceHelper/.aws-sam/output/$PROJECT_NAME.template
   discard-paths: yes  
