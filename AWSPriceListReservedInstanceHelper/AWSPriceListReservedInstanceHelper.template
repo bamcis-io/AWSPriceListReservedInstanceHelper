@@ -30,6 +30,13 @@
 			"MaxValue" : 10240,
 			"Default" : 4096
 		},
+        "EC2WorkerMemory" : {
+			"Description" : "The amount of memory assigned to the worker function",
+			"Type" : "Number",
+			"MinValue" : 128,
+			"MaxValue" : 10240,
+			"Default" : 8192
+		},
 		"WorkerTimeout" : {
 			"Type" : "Number",
 			"Description" : "The amount of time to give the worker to complete. The EC2 and RDS jobs take much longer than the others.",
@@ -356,6 +363,9 @@
                             "Resource" : [
                                 {
                                     "Fn::GetAtt" : [ "AWSPriceListRIWorker", "Arn"]
+                                },
+                                {
+                                    "Fn::GetAtt" : [ "AWSPriceListRIWorkerEC2", "Arn"]
                                 }
                             ]
                         }
@@ -428,6 +438,25 @@
             "Properties" : {
                 "LogGroupName" : {
 					"Fn::Sub" : "/aws/lambda/${AWSPriceListRIWorker}"
+				},
+                "RetentionInDays" : {
+                    "Fn::If" : [
+                        "InfiniteRetention",
+                        {
+                            "Ref" : "AWS::NoValue"
+                        },
+                        {
+                            "Ref" : "LogRetentionInDays"
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudWatchLogGroupWorkerEC2"  : {
+            "Type" : "AWS::Logs::LogGroup",
+            "Properties" : {
+                "LogGroupName" : {
+					"Fn::Sub" : "/aws/lambda/${AWSPriceListRIWorkerEC2}"
 				},
                 "RetentionInDays" : {
                     "Fn::If" : [
@@ -515,6 +544,59 @@
 			]
         },
 
+        "AWSPriceListRIWorkerEC2" : {
+            "Type" : "AWS::Serverless::Function",
+            "Properties" : {
+                "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::RunForServiceAsync",
+				"Description": "Downloads the price list file for EC2 and formats it for ingestion by Athena.",
+                "Runtime" : "dotnetcore3.1",
+                "CodeUri" : "",
+                "MemorySize" : {
+					"Ref" : "EC2WorkerMemory"
+				},
+                "Timeout"    : {
+					"Ref" : "WorkerTimeout"
+				},
+                "Role"       : {
+                    "Fn::GetAtt" : [
+                        "LambdaPriceListWorkerRole",
+                        "Arn"
+                    ]
+                },
+				"Environment" : {
+				    "Variables" : {
+						"BUCKET" : {
+							"Ref" : "ResultsS3Bucket"
+						},
+						"SNS" : {
+							"Ref" : "SNSTopic"
+						}
+					}
+				},
+				"DeadLetterQueue" : {
+					"Type" : "SQS",
+					"TargetArn" : {
+						"Fn::GetAtt" : [ "SQSWorkerDeadLetterQueue", "Arn" ]
+					}
+				},
+                "Tags"       : {
+                    "Name" : "AWSPriceListRIWorker",
+                    "Environment" : {
+                        "Ref" : "EnvironmentTag"
+                    },
+                    "Application" : {
+                        "Ref" : "ApplicationTag"
+                    },
+                    "Organization" : {
+                        "Ref" : "OrganizationTag"
+                    }
+                }
+            },
+			"DependsOn" : [
+				"LambdaSQSWorkerPolicy"
+			]
+        },
+
 		"AWSPriceListRIDistributor" : {
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
@@ -535,6 +617,9 @@
 						"FunctionName" : {
 							"Ref" : "AWSPriceListRIWorker"
 						},
+                        "EC2FunctionName" : {
+                            "Ref" : "AWSPriceListRIWorkerEC2"
+                        },
 						"SNS" : {
 							"Ref" : "SNSTopic"
 						},

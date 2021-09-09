@@ -107,14 +107,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
 
             // Since Amazon EC2 has savings plans now, calculating RIs doesn't really add much
             // value, so only do them if they're specifically opted in
-            if (Boolean.TryParse(System.Environment.GetEnvironmentVariable("ComputeEC2"), out bool doEC2))
-            {
-                if (!doEC2)
-                {
-                    services = services.Where(x => x != Constants.AmazonEC2);
-                }
-            }
-            else
+            if (!Boolean.TryParse(System.Environment.GetEnvironmentVariable("ComputeEC2"), out bool doEC2) || !doEC2)
             {
                 services = services.Where(x => x != Constants.AmazonEC2);
             }
@@ -125,7 +118,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
                 {
                     InvokeRequest Req = new InvokeRequest()
                     {
-                        FunctionName = System.Environment.GetEnvironmentVariable("FunctionName"),
+                        FunctionName = (service == Constants.AmazonEC2) ? System.Environment.GetEnvironmentVariable("EC2FunctionName") : System.Environment.GetEnvironmentVariable("FunctionName"),
                         Payload = $"{{\"service\":\"{service}\"}}",
                         InvocationType = InvocationType.Event,
                         ClientContext = JsonConvert.SerializeObject(context.ClientContext, Formatting.None),
