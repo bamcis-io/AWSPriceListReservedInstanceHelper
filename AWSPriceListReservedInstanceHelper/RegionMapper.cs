@@ -34,6 +34,7 @@ namespace BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper
             { "APN3", "ap-northeast-3" },
             { "APS1", "ap-southeast-1" },
             { "APS2", "ap-southeast-2" },
+            { "APS4", "ap-southeast-3" },
             { "APS3", "ap-south-1" },
             { "APE1", "ap-east-1" },
             { "SAE1", "sa-east-1" },
