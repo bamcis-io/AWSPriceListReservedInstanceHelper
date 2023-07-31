@@ -733,7 +733,7 @@
 						"Ref" : "SNSTopic"
 					}
 				],
-				"AlarmDescription" : "Alarm if Pricelist Reserved Instance Worker does not execute at least six times a day.",
+				"AlarmDescription" : "Alarm if Pricelist Reserved Instance Worker does not execute at least five or six (if computing EC2) times a day.",
 				"ComparisonOperator" : "LessThanThreshold",
 				"Namespace" : "AWS/Lambda",
 				"MetricName" : "Invocations",
@@ -747,7 +747,13 @@
 				],
 				"Statistic" : "Sum",
 				"EvaluationPeriods" : "1",
-				"Threshold" : "6",
+				"Threshold" : {
+                                  "Fn::If": [
+       				    "ComputeEC2",
+                                    6,
+                                    5
+				  ]
+                                },
 				"Period" : "86400",
 				"Unit" : "Count",
 				"TreatMissingData" : "notBreaching"
