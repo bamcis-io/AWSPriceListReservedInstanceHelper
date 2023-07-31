@@ -179,7 +179,7 @@ namespace AWSPriceListReservedInstanceHelper.Tests
             // ASSERT
         }
 
-        [Fact]
+        [Fact (Skip = "Stream is too large to process in dependent library")]
         public async Task TestEntrypointCsvEC2()
         {
             // ARRANGE
