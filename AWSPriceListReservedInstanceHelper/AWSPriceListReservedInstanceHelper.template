@@ -506,6 +506,7 @@
 				"Description": "Downloads the price list file for a specified service and formats it for ingestion by Athena.",
                 "Runtime" : "dotnet6",
                 "CodeUri" : "",
+                "Architectures" : ["arm64"],
                 "MemorySize" : {
 					"Ref" : "WorkerMemory"
 				},
@@ -559,6 +560,7 @@
 				"Description": "Downloads the price list file for EC2 and formats it for ingestion by Athena.",
                 "Runtime" : "dotnet6",
                 "CodeUri" : "",
+                "Architectures" : ["arm64"],
                 "MemorySize" : {
 					"Ref" : "EC2WorkerMemory"
 				},
@@ -611,6 +613,7 @@
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::LaunchWorkersAsync",
 				"Description": "Kicks off the AWS price list formatter worker functions.",
                 "Runtime" : "dotnet6",
+                "Architectures" : ["arm64"],
                 "CodeUri" : "",
                 "MemorySize" : 128,
                 "Timeout"    : 30,
