@@ -83,6 +83,14 @@
                 },
                 0
             ]
+        },
+        "ComputeEC2": {
+          "Fn::Equals": [
+            {
+              "Ref": "ComputeEC2"
+            },
+            "true"
+          ]
         }
     },
 
@@ -496,7 +504,7 @@
             "Properties" : {
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::RunForServiceAsync",
 				"Description": "Downloads the price list file for a specified service and formats it for ingestion by Athena.",
-                "Runtime" : "dotnetcore3.1",
+                "Runtime" : "dotnet6",
                 "CodeUri" : "",
                 "MemorySize" : {
 					"Ref" : "WorkerMemory"
@@ -549,7 +557,7 @@
             "Properties" : {
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::RunForServiceAsync",
 				"Description": "Downloads the price list file for EC2 and formats it for ingestion by Athena.",
-                "Runtime" : "dotnetcore3.1",
+                "Runtime" : "dotnet6",
                 "CodeUri" : "",
                 "MemorySize" : {
 					"Ref" : "EC2WorkerMemory"
@@ -601,8 +609,8 @@
             "Type" : "AWS::Serverless::Function",
             "Properties" : {
                 "Handler" : "AWSPriceListReservedInstanceHelper::BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper.Entrypoint::LaunchWorkersAsync",
-				"Description": "Kicks of the AWS price list formatter worker functions.",
-                "Runtime" : "dotnetcore3.1",
+				"Description": "Kicks off the AWS price list formatter worker functions.",
+                "Runtime" : "dotnet6",
                 "CodeUri" : "",
                 "MemorySize" : 128,
                 "Timeout"    : 30,
@@ -747,7 +755,13 @@
 				],
 				"Statistic" : "Sum",
 				"EvaluationPeriods" : "1",
-				"Threshold" : "6",
+				"Threshold" : {
+                  "Fn::If": [
+                    "ComputeEC2",
+                    "6",
+                    "5"
+                  ]
+                },
 				"Period" : "86400",
 				"Unit" : "Count",
 				"TreatMissingData" : "notBreaching"

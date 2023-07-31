@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
     <RootNamespace>BAMCIS.LambdaFunctions.AWSPriceListReservedInstanceHelper</RootNamespace>
     <Authors>Michael Haken</Authors>
@@ -20,16 +20,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Amazon.Lambda.Core" Version="2.0.0" />
-    <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="2.0.0" />
-    <PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="2.1.0" />
+    <PackageReference Include="Amazon.Lambda.Core" Version="2.1.0" />
+    <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="2.1.1" />
+    <PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="2.3.1" />
     <PackageReference Include="Amazon.Lambda.SNSEvents" Version="2.0.0" />
     <PackageReference Include="AWSPriceListApi" Version="5.0.0" />
-    <PackageReference Include="AWSSDK.Lambda" Version="3.7.3.10" />
-    <PackageReference Include="AWSSDK.S3" Version="3.7.2.1" />
-    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.7.2.32" />
+    <PackageReference Include="AWSSDK.Lambda" Version="3.7.201.3" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.201.5" />
+    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.7.200.7" />
     <PackageReference Include="BAMCIS.AWSLambda.Common" Version="2.0.1" />
-    <PackageReference Include="CsvHelper" Version="27.1.1" />
+    <PackageReference Include="CsvHelper" Version="30.0.1" />
   </ItemGroup>
 
 </Project>
